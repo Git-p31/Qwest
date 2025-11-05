@@ -1,0 +1,378 @@
+/* Общие стили */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Alata', sans-serif;
+  background: #0b091d;
+  color: #e2e0ff;
+  overflow-x: hidden;
+  position: relative;
+  min-height: 100vh;
+}
+
+/* Снежинки */
+#snowflakes {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Обёртка игры */
+.game-wrapper {
+  position: relative;
+  z-index: 10;
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.screen {
+  display: none;
+}
+
+.screen.active {
+  display: block;
+}
+
+.title {
+  font-family: 'Cinzel', serif;
+  font-size: 2.6rem;
+  text-align: center;
+  margin: 20px 0 10px;
+  background: linear-gradient(to right, #a78bfa, #c084fc);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.subtitle {
+  text-align: center;
+  margin-bottom: 25px;
+  color: #b4a7d6;
+}
+
+/* Секции */
+.section {
+  margin-bottom: 25px;
+}
+
+.section h3 {
+  text-align: center;
+  margin-bottom: 15px;
+  color: #d8b4fe;
+  font-family: 'Cinzel', serif;
+  font-size: 1.3rem;
+}
+
+/* Команды */
+.teams-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+  max-width: 500px;
+  margin: 0 auto 20px;
+}
+
+.team-card {
+  background: rgba(30, 25, 60, 0.7);
+  border: 2px solid #5b4ab1;
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.team-card:hover {
+  border-color: #a78bfa;
+  background: rgba(50, 40, 100, 0.8);
+  transform: translateY(-4px);
+}
+
+.team-card.selected {
+  border-color: #c084fc;
+  background: rgba(65, 55, 120, 0.9);
+}
+
+.team-badge {
+  font-weight: bold;
+  color: #e9d5ff;
+  font-size: 1rem;
+}
+
+/* Роли */
+.roles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 20px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.role-card {
+  background: rgba(45, 35, 75, 0.6);
+  border: 2px solid #5b4ab1;
+  border-radius: 12px;
+  padding: 15px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.role-card:hover {
+  border-color: #a78bfa;
+  background: rgba(65, 50, 110, 0.8);
+  transform: translateY(-4px);
+}
+
+.role-card.selected {
+  border-color: #c084fc;
+  background: rgba(85, 60, 140, 0.9);
+}
+
+.role-icon {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 8px;
+  color: #c084fc;
+}
+
+.role-card span {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* Кнопка старта */
+#startGameBtn {
+  display: block;
+  margin: 20px auto 0;
+  padding: 12px 30px;
+  background: linear-gradient(135deg, #7e22ce, #a855f7);
+  color: white;
+  border: none;
+  border-radius: 50px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+#startGameBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#startGameBtn:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
+/* Игровой экран */
+.game-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #4a406c;
+}
+
+.game-header h2 {
+  font-family: 'Cinzel', serif;
+  font-size: 1.6rem;
+  color: #d8b4fe;
+}
+
+.player-info {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+#playerRole {
+  background: rgba(30, 20, 60, 0.7);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-weight: bold;
+  color: #e9d5ff;
+  font-size: 1rem;
+}
+
+/* Карта */
+.map-section {
+  background: rgba(15, 10, 40, 0.4);
+  padding: 20px;
+  border-radius: 16px;
+  margin: 25px 0;
+  border: 1px solid #4a406c;
+}
+
+.map-section h3 {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #c4b5fd;
+  font-family: 'Cinzel', serif;
+}
+
+.locations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 18px;
+}
+
+.location-card {
+  background: linear-gradient(135deg, #2d2542, #1e1433);
+  border-radius: 14px;
+  padding: 18px 10px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.location-card:hover {
+  transform: translateY(-5px);
+  border-color: #a78bfa;
+  box-shadow: 0 6px 12px rgba(167, 139, 250, 0.3);
+  background: linear-gradient(135deg, #352b4d, #251a40);
+}
+
+.loc-icon {
+  font-size: 2.2rem;
+  margin-bottom: 10px;
+  display: block;
+  transition: transform 0.3s;
+}
+
+.location-card:hover .loc-icon {
+  transform: scale(1.2) rotate(10deg);
+}
+
+.loc-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #e2d9ff;
+}
+
+/* Задания */
+.quests-section h3 {
+  margin: 25px 0 15px;
+  color: #c4b5fd;
+}
+
+#questList {
+  list-style: none;
+}
+
+#questList li {
+  background: rgba(30, 20, 60, 0.6);
+  padding: 12px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.2s;
+  border-left: 3px solid transparent;
+}
+
+#questList li:hover {
+  background: rgba(60, 45, 110, 0.7);
+  border-left: 3px solid #a78bfa;
+}
+
+/* Модальные окна */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-content {
+  background: #1a1433;
+  color: #e0d6ff;
+  padding: 25px;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 400px;
+  position: relative;
+  border: 1px solid #5b4ab1;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.modal-header h3 {
+  color: #d8b4fe;
+}
+
+.modal-header span {
+  font-size: 1.8rem;
+  cursor: pointer;
+  color: #a78bfa;
+}
+
+button {
+  padding: 10px 20px;
+  background: #7e22ce;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 10px;
+  font-size: 1rem;
+}
+
+button:hover {
+  background: #9333ea;
+}
+
+.response {
+  margin-top: 15px;
+  padding: 10px;
+  background: rgba(50, 30, 90, 0.6);
+  border-radius: 6px;
+  display: none;
+}
+
+.response.show {
+  display: block;
+}
+
+/* Снежинки */
+.snowflake {
+  position: absolute;
+  top: -20px;
+  color: #fff;
+  font-size: 1.2rem;
+  opacity: 0.7;
+  pointer-events: none;
+  z-index: 0;
+  animation: fall linear forwards;
+}
+
+@keyframes fall {
+  to {
+    transform: translateY(105vh) rotate(360deg);
+  }
+}
