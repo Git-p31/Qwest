@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Хроники Затерянных Миров — Игровое окно</title>
+    <link rel="stylesheet" href="style.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+</head>
+<body class="game-body">
+    <canvas id="snowCanvas"></canvas>
+    
+    <div class="game-wrap">
+        
+        <header class="game-header">
+            <div>
+                <span id="myNameHeader" class="player-name-header">Привет, Игрок</span>
+                в команде <strong id="myTeamName">—</strong>
+                <span id="myPlayerRole" class="player-role">Роль: —</span>
+            </div>
+            <div>
+                <span id="status" class="status-header">Загрузка...</span>
+                <button id="btnLogout" class="secondary">Выйти</button>
+            </div>
+        </header>
+
+        <main class="game-main">
+            <aside class="inventory-panel card">
+                <h2>Инвентарь 🎒</h2>
+                <ul id="inventoryList" class="inventory-list">
+                    <li>Фонарик (Базовый)</li>
+                    <li>Компас (Базовый)</li>
+                    <li>Рация (Командная)</li>
+                </ul>
+            </aside>
+
+            <section class="map-window card">
+                <h2>Карта Мира 🗺️</h2>
+                <div class="map-placeholder">
+                    <p>Игровая карта. Перемещение и ключевые точки.</p>
+                    <p>Текущее местоположение: Зимний Лес</p>
+                </div>
+            </section>
+
+            <section class="bottom-panel">
+                <div class="tasks-panel card">
+                    <h2>Активные Задания ✅</h2>
+                    <ul id="tasksList" class="tasks-list">
+                        <li>[Основное] Найти осколок кристалла в Ледяной пещере.</li>
+                        <li>[Ежедн.] Собрать 10 снежинок.</li>
+                    </ul>
+                </div>
+                
+                <div class="team-info-panel card">
+                    <h2>Состав команды (<strong id="myTeamMembersCount">0</strong>/<strong id="myTeamMaxCapacity">10</strong>)</h2>
+                    <ul id="currentTeamMembersList" class="member-list">
+                        </ul>
+
+                    <div id="teamActionsButtonContainer" class="hidden" style="margin-top: 20px; text-align: center;">
+                        <button id="btnOpenModal" class="start-button" style="width: 80%; padding: 12px 20px; font-size: 1rem;">
+                            Действия Лидера 🛠️
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="teamModal" class="modal-backdrop hidden">
+        <div class="modal-content card">
+            <button class="modal-close" onclick="closeModal()">✖</button>
+            <h2 id="modalTitle">Действия команды</h2>
+
+            <div id="modalNamingSection">
+                <h3>Придумайте название:</h3>
+                <input type="text" id="modalNewTeamNameInput" placeholder="Введите уникальное название" class="modal-input">
+                <button id="modalBtnSaveTeamName" class="start-button modal-button-full" style="background: linear-gradient(45deg, var(--accent), #ffd66b);">Сохранить название</button>
+            </div>
+
+            <hr style="border-color: rgba(255,255,255,0.1); margin: 20px 0;">
+
+            <h3>Селфи команды:</h3>
+            <div id="modalSelfieDisplay" style="margin-bottom: 15px;">
+                </div>
+            
+            <label for="modalSelfieUpload" class="start-button modal-button-full" style="background: linear-gradient(45deg, #a777f2, #e650d0);">
+                📸 Сделать/Загрузить Селфи
+            </label>
+            <input type="file" id="modalSelfieUpload" accept="image/*" capture="environment" class="hidden"> 
+
+        </div>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>

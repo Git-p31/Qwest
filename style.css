@@ -1,378 +1,270 @@
-/* Общие стили */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* style.css (Финальная версия: Новогодний дизайн, адаптивность, модальное окно) */
+
+:root{
+  --bg1: linear-gradient(180deg, #071024 0%, #0b2540 70%, #1b3f5f 100%); 
+  --card: #081529aa;
+  --glass: rgba(255,255,255,0.12); 
+  --accent: #ffde59; /* Золотой акцент */
+  --accent-light: #fff2c4;
+  --accent2: #8be9fd; /* Светло-голубой/морозный акцент */
+  --muted: rgba(255,255,255,0.7);
+  --shadow: 0 10px 40px rgba(0,0,0,0.6);
+  --glass-border: rgba(255,255,255,0.15);
+  --snow-glow: 0 0 15px rgba(139, 233, 253, 0.6); 
 }
 
-body {
-  font-family: 'Alata', sans-serif;
-  background: #0b091d;
-  color: #e2e0ff;
-  overflow-x: hidden;
-  position: relative;
-  min-height: 100vh;
+*{box-sizing:border-box;font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; transition: background-color 0.2s, box-shadow 0.2s, border-color 0.2s;}
+html,body{height:100%;margin:0;color:#fff;}
+canvas#snowCanvas{position:fixed;left:0;top:0;pointer-events:none;z-index:99;} 
+.hidden{display: none !important;}
+
+/* ===== Стили Главного Экрана (index.html) ===== */
+
+.selection-body{
+    display: flex; align-items: center; justify-content: center; 
+    min-height: 100vh; 
+    background: var(--bg1); 
+    padding: 20px; 
+    overflow-y: auto;
+}
+.selection-wrap{
+    width: 100%; 
+    max-width: 700px; 
+    text-align: center; 
+    position: relative; 
+    z-index: 100; 
+}
+.game-title{
+    font-size: clamp(2rem, 5vw, 3.5rem); 
+    color: var(--accent-light); 
+    text-shadow: var(--snow-glow); 
+    margin-bottom: 20px; 
+    font-weight: 900;
+}
+.status-selection{ color: var(--accent2); font-size: 1rem; margin-bottom: 30px;}
+.selection-card{
+    background: rgba(8, 21, 41, 0.85); 
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--accent2); 
+    border-radius: 20px;
+    padding: 30px; 
+    box-shadow: 0 0 30px rgba(139, 233, 253, 0.4); 
+    background-image: radial-gradient(circle at top left, rgba(255,255,255,0.05) 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+.section-header{
+    font-size: clamp(1.4rem, 3vw, 1.8rem); 
+    color: var(--accent2); 
+    margin: 20px 0 15px; 
+    font-weight: 700;
+}
+.team-selection-grid, .role-selection-grid{
+    display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;
+}
+.team-card-btn, .role-card{
+    background: transparent; border: 2px solid rgba(255,255,255,0.2);
+    color: #fff; padding: 15px 30px; border-radius: 12px;
+    font-size: 1.1rem; font-weight: 600; cursor: pointer;
+    box-shadow: 0 0 5px rgba(0,0,0,0.5);
+    min-width: 180px;
+    text-align: center;
+    display: flex; flex-direction: column; align-items: center;
+}
+.team-card-btn:hover:not(.selected), .role-card:hover:not(.selected){
+    border-color: var(--accent2); box-shadow: 0 0 15px var(--accent2);
+    transform: translateY(-2px);
+}
+.team-card-btn.selected, .role-card.selected{
+    border-color: var(--accent); box-shadow: 0 0 20px var(--accent);
+    background: rgba(255,222,89,0.1);
+    transform: scale(1.02);
+}
+.role-icon{ font-size: 1.8rem; margin-bottom: 5px; }
+
+/* ФИКС ШИРИНЫ ИНПУТА */
+.name-input-block input{ width: 100%; padding: 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: #fff; outline: none; font-size: 16px; }
+.name-input-block input:focus{ border-color: var(--accent2); box-shadow:0 0 8px var(--accent2);}
+.name-input-container {
+    max-width: 400px; 
+    margin: 0 auto;  
+    padding-top: 15px; 
+}
+.start-button{
+    background: linear-gradient(45deg, var(--accent2), #50b0ff); /* Голубой градиент */
+    color: #051025; 
+    font-weight: 700; font-size: 1.2rem;
+    padding: 15px 40px; border-radius: 10px;
+    margin-top: 30px;
+    box-shadow: 0 5px 20px rgba(80, 176, 255, 0.6);
+    text-transform: uppercase;
+    display: block; 
+    width: 100%; 
+}
+.start-button:disabled{ opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+#authMsg{ color: var(--muted); margin-top: 10px; font-size: 14px; padding: 5px 0; }
+.hint{text-align: center;}
+
+
+/* ===== Стили Игрового Интерфейса (main-screen.html) ===== */
+
+.game-body{background:var(--bg1); overflow: hidden;}
+.game-wrap{
+    padding: 20px; width: 100%; max-width: 1400px; margin: 0 auto; 
+    height: 100vh; 
+    display: flex; flex-direction: column; position: relative; z-index: 100;
+}
+.card{
+    background:linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
+    border-radius:18px;
+    padding:20px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+    border:1px solid rgba(255,255,255,0.2);
+    backdrop-filter: blur(6px);
+}
+.card h2{margin-top:0; font-weight: 700; font-size: 1.2rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 15px;}
+.game-header{
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 15px 25px; background: rgba(0,0,0,0.4); border-radius: 15px;
+    border: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px;
+}
+.team-block strong{ color: var(--accent); font-size: 1.2rem; margin-right: 15px; }
+.player-role{ font-size: 0.9rem; color: var(--accent2); background: rgba(139, 233, 253, 0.15); padding: 5px 10px; border-radius: 8px; }
+.player-name-header{ font-weight: 600; margin-right: 15px; }
+.status-header{font-size: 14px; color: var(--muted); padding: 0 10px;}
+
+/* Десктопная сетка (1100px+) */
+.game-main{
+    flex-grow: 1;
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    grid-template-rows: 1fr auto;
+    gap: 20px;
+    min-height: 0; 
 }
 
-/* Снежинки */
-#snowflakes {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 0;
+/* Left Panel: Inventory */
+.inventory-panel{ grid-column: 1 / 2; grid-row: 1 / 2; }
+.inventory-list{ list-style: none; padding: 0; }
+.inventory-list li{ padding: 8px 0; border-bottom: 1px dashed rgba(255,255,255,0.1); font-size: 0.95rem; }
+
+/* Center: Map */
+.map-window{ grid-column: 2 / 3; grid-row: 1 / 2; display: flex; flex-direction: column; }
+.map-placeholder{
+    flex-grow: 1; background: #182530; border: 3px solid #3c6e94; border-radius: 10px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 1.5rem; color: #7af;
 }
 
-/* Обёртка игры */
-.game-wrapper {
-  position: relative;
-  z-index: 10;
-  padding: 20px;
-  max-width: 800px;
-  margin: 0 auto;
-}
+/* Bottom Panel (Tasks + Team Info) */
+.bottom-panel{ grid-column: 1 / 3; grid-row: 2 / 3; display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
 
-.screen {
-  display: none;
-}
+.tasks-list{ list-style: none; padding: 0; }
+.tasks-list li{ padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.9rem; }
+.team-info-panel h2{ border-color: var(--accent2); }
 
-.screen.active {
-  display: block;
-}
+/* Team List */
+.member-list{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px;}
+.member-list li{background:rgba(255,255,255,0.15);padding:4px 10px;border-radius:12px;font-size:14px; font-weight: 500;}
+.member-list li.leader{background:var(--accent);color:#111;font-weight:700; border: 1px solid var(--accent);}
+.member-list li.me{border: 2px solid var(--accent2);}
 
-.title {
-  font-family: 'Cinzel', serif;
-  font-size: 2.6rem;
-  text-align: center;
-  margin: 20px 0 10px;
-  background: linear-gradient(to right, #a78bfa, #c084fc);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+/* Buttons */
+button.secondary{
+    background:rgba(255,255,255,0.1);
+    border: 0;
+    color:var(--accent-light);
+    box-shadow: none;
+    font-weight: 500;
+    padding: 10px 15px;
+    border-radius: 10px;
+    cursor: pointer;
 }
+button.secondary:hover{background:rgba(255,255,255,0.2);}
 
-.subtitle {
-  text-align: center;
-  margin-bottom: 25px;
-  color: #b4a7d6;
+/* ===== Стили Модального Окна (ФИКС) ===== */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7); 
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(5px);
 }
-
-/* Секции */
-.section {
-  margin-bottom: 25px;
-}
-
-.section h3 {
-  text-align: center;
-  margin-bottom: 15px;
-  color: #d8b4fe;
-  font-family: 'Cinzel', serif;
-  font-size: 1.3rem;
-}
-
-/* Команды */
-.teams-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 16px;
-  max-width: 500px;
-  margin: 0 auto 20px;
-}
-
-.team-card {
-  background: rgba(30, 25, 60, 0.7);
-  border: 2px solid #5b4ab1;
-  border-radius: 12px;
-  padding: 14px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.team-card:hover {
-  border-color: #a78bfa;
-  background: rgba(50, 40, 100, 0.8);
-  transform: translateY(-4px);
-}
-
-.team-card.selected {
-  border-color: #c084fc;
-  background: rgba(65, 55, 120, 0.9);
-}
-
-.team-badge {
-  font-weight: bold;
-  color: #e9d5ff;
-  font-size: 1rem;
-}
-
-/* Роли */
-.roles-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 20px;
-  max-width: 600px;
-  margin: 0 auto;
-}
-
-.role-card {
-  background: rgba(45, 35, 75, 0.6);
-  border: 2px solid #5b4ab1;
-  border-radius: 12px;
-  padding: 15px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.role-card:hover {
-  border-color: #a78bfa;
-  background: rgba(65, 50, 110, 0.8);
-  transform: translateY(-4px);
-}
-
-.role-card.selected {
-  border-color: #c084fc;
-  background: rgba(85, 60, 140, 0.9);
-}
-
-.role-icon {
-  width: 48px;
-  height: 48px;
-  margin-bottom: 8px;
-  color: #c084fc;
-}
-
-.role-card span {
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
-/* Кнопка старта */
-#startGameBtn {
-  display: block;
-  margin: 20px auto 0;
-  padding: 12px 30px;
-  background: linear-gradient(135deg, #7e22ce, #a855f7);
-  color: white;
-  border: none;
-  border-radius: 50px;
-  font-size: 1.1rem;
-  cursor: pointer;
-  transition: 0.3s;
-}
-
-#startGameBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-#startGameBtn:hover:not(:disabled) {
-  transform: scale(1.05);
-}
-
-/* Игровой экран */
-.game-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 25px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #4a406c;
-}
-
-.game-header h2 {
-  font-family: 'Cinzel', serif;
-  font-size: 1.6rem;
-  color: #d8b4fe;
-}
-
-.player-info {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-#playerRole {
-  background: rgba(30, 20, 60, 0.7);
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-weight: bold;
-  color: #e9d5ff;
-  font-size: 1rem;
-}
-
-/* Карта */
-.map-section {
-  background: rgba(15, 10, 40, 0.4);
-  padding: 20px;
-  border-radius: 16px;
-  margin: 25px 0;
-  border: 1px solid #4a406c;
-}
-
-.map-section h3 {
-  text-align: center;
-  margin-bottom: 20px;
-  color: #c4b5fd;
-  font-family: 'Cinzel', serif;
-}
-
-.locations-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 18px;
-}
-
-.location-card {
-  background: linear-gradient(135deg, #2d2542, #1e1433);
-  border-radius: 14px;
-  padding: 18px 10px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  border: 1px solid transparent;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-}
-
-.location-card:hover {
-  transform: translateY(-5px);
-  border-color: #a78bfa;
-  box-shadow: 0 6px 12px rgba(167, 139, 250, 0.3);
-  background: linear-gradient(135deg, #352b4d, #251a40);
-}
-
-.loc-icon {
-  font-size: 2.2rem;
-  margin-bottom: 10px;
-  display: block;
-  transition: transform 0.3s;
-}
-
-.location-card:hover .loc-icon {
-  transform: scale(1.2) rotate(10deg);
-}
-
-.loc-name {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #e2d9ff;
-}
-
-/* Задания */
-.quests-section h3 {
-  margin: 25px 0 15px;
-  color: #c4b5fd;
-}
-
-#questList {
-  list-style: none;
-}
-
-#questList li {
-  background: rgba(30, 20, 60, 0.6);
-  padding: 12px;
-  margin-bottom: 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: 0.2s;
-  border-left: 3px solid transparent;
-}
-
-#questList li:hover {
-  background: rgba(60, 45, 110, 0.7);
-  border-left: 3px solid #a78bfa;
-}
-
-/* Модальные окна */
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 100;
-}
-
-.modal.hidden {
-  display: none;
-}
-
 .modal-content {
-  background: #1a1433;
-  color: #e0d6ff;
-  padding: 25px;
-  border-radius: 16px;
-  width: 90%;
-  max-width: 400px;
-  position: relative;
-  border: 1px solid #5b4ab1;
+    position: relative;
+    max-width: 500px; 
+    width: 90%;
+    padding: 30px;
+    background: linear-gradient(180deg, #102a43, #071529); 
+    border: 2px solid var(--accent2);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.9);
+    animation: fadeIn 0.3s ease-out;
+}
+.modal-close {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 5px;
+    line-height: 1;
+}
+.modal-close:hover {
+    color: var(--accent);
+}
+.modal-input { /* Стиль для modal-input */
+    width: 100%; 
+    padding: 10px; 
+    margin-bottom: 15px; 
+    border-radius: 8px; 
+    border: 1px solid rgba(255,255,255,0.2); 
+    background: rgba(0,0,0,0.3); 
+    color: white;
+}
+.modal-button-full { /* Стиль для modal-button-full */
+    width: 100%;
+    padding: 12px 20px !important;
+    font-size: 1rem !important;
+    margin-top: 10px;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
 }
 
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
+
+/* =======================================
+   ADAPTIVE STYLES (АДАПТАЦИЯ)
+   ======================================= */
+
+/* 1. ПЛАНШЕТ/ШИРОКИЙ ТЕЛЕФОН (Max-width 1100px) */
+@media (max-width:1100px){
+    .game-main{ 
+        grid-template-columns: 1fr; 
+        grid-template-rows: 400px auto auto; 
+        gap: 15px; 
+    }
+    .game-wrap{ height: auto; }
+    .map-window{ grid-row: 1 / 2; grid-column: 1 / 2; height: 400px;} 
+    .bottom-panel{ grid-row: 2 / 3; grid-column: 1 / 2; grid-template-columns: 1fr; gap: 15px; }
+    .inventory-panel{ grid-row: 3 / 4; grid-column: 1 / 2; }
+    .game-header{ flex-direction: column; align-items: flex-start; gap: 10px; padding: 15px; }
 }
 
-.modal-header h3 {
-  color: #d8b4fe;
-}
-
-.modal-header span {
-  font-size: 1.8rem;
-  cursor: pointer;
-  color: #a78bfa;
-}
-
-button {
-  padding: 10px 20px;
-  background: #7e22ce;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  margin-top: 10px;
-  font-size: 1rem;
-}
-
-button:hover {
-  background: #9333ea;
-}
-
-.response {
-  margin-top: 15px;
-  padding: 10px;
-  background: rgba(50, 30, 90, 0.6);
-  border-radius: 6px;
-  display: none;
-}
-
-.response.show {
-  display: block;
-}
-
-/* Снежинки */
-.snowflake {
-  position: absolute;
-  top: -20px;
-  color: #fff;
-  font-size: 1.2rem;
-  opacity: 0.7;
-  pointer-events: none;
-  z-index: 0;
-  animation: fall linear forwards;
-}
-
-@keyframes fall {
-  to {
-    transform: translateY(105vh) rotate(360deg);
-  }
+/* 2. ТЕЛЕФОН (Max-width 700px) */
+@media (max-width:700px){
+    .selection-card{padding: 20px;}
+    .team-card-btn, .role-card{min-width: 100%;}
+    .role-card{flex-direction: row; justify-content: center;}
+    .map-window{ height: 300px; } 
+    .start-button{ font-size: 1rem; padding: 12px 20px;}
+    .name-input-container { max-width: 100%; }
 }
