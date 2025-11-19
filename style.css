@@ -29,12 +29,25 @@
 /* === ОСНОВНЫЕ НАСТРОЙКИ === */
 * { box-sizing: border-box; font-family: var(--font-main); transition: all 0.2s ease-out; }
 
+/* В style.css замените блок html, body на этот: */
+
 html, body {
-  height: 100%; margin: 0; padding: 0;
-  color: var(--text-main);
-  background: var(--bg-deep);
-  background-image: var(--bg-gradient);
-  background-attachment: fixed;
+  height: 100%; 
+  margin: 0; 
+  padding: 0;
+  color: var(--text-main); /* Белый текст */
+  
+  /* 1. Темная подложка (чтобы текст читался) + 2. Ваша картинка */
+  background: 
+    linear-gradient(rgba(19, 9, 27, 0.85), rgba(19, 9, 27, 0.9)), /* Затемнение 85-90% */
+    url('image.png'); /* Ваше изображение */
+    
+  /* Настройки позиционирования фона */
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: cover; /* Растягивает картинку на весь экран */
+  background-attachment: fixed; /* Фон стоит на месте при прокрутке */
+  
   overflow-x: hidden;
 }
 
