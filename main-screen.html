@@ -87,18 +87,20 @@
     <div id="tradeModal" class="modal-backdrop hidden">
         <div class="modal-content card">
             <button class="modal-close" onclick="closeTradeModal()">✖</button>
-            <h3>Предложить обмен</h3>
-            <p class="muted" style="margin-bottom: 10px;">Выберите команду и предмет:</p>
+            <h3>Предложить обмен 🤝</h3>
             
-            <label>Кому:</label>
-            <select id="tradeTargetTeam" class="modal-input" style="margin-bottom: 15px;"></select>
+            <label style="display:block; margin-top:10px; color:var(--testosterose);">1. С кем меняемся:</label> 
+            <select id="tradeTargetTeam" class="modal-input"></select>
             
-            <label>Что отдать:</label>
+            <label style="display:block; margin-top:10px; color:var(--accent-cyan);">2. Вы отдаете:</label> 
             <select id="tradeOfferSelect" class="modal-input"></select>
             
-            <button class="start-button" onclick="sendTradeRequest()" style="margin-top: 20px;">Отправить</button>
+            <label style="display:block; margin-top:10px; color:var(--accent-gold);">3. Вы получаете взамен:</label> 
+            <select id="tradeRequestSelect" class="modal-input"></select>
+            
+            <button class="start-button" onclick="sendTradeRequest()" style="margin-top:20px;">Отправить предложение</button>
         </div>
-    </div>
+    </div>  
 
     <div id="incomingTradesModal" class="modal-backdrop hidden">
         <div class="modal-content card">
