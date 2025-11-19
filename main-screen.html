@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Хроники Затерянных Миров — Игровое окно</title>
+    <title>Игровое окно</title>
     <link rel="stylesheet" href="style.css" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
 </head>
@@ -11,16 +11,16 @@
     <canvas id="snowCanvas"></canvas>
     
     <div class="game-wrap">
-        
         <header class="game-header">
-            <div>
-                <span id="myNameHeader" class="player-name-header">Привет, Игрок</span>
-                в команде <strong id="myTeamName">—</strong>
-                <span id="myPlayerRole" class="player-role">Роль: —</span>
+            <div class="header-left">
+                <span id="myNameHeader" class="player-name-header">...</span>
+                в <strong id="myTeamName">...</strong>
+                <span id="myPlayerRole" class="player-role">...</span>
             </div>
-            <div>
-                <span id="status" class="status-header">Загрузка...</span>
-                <button id="btnLogout" class="secondary">Выйти</button>
+            <div class="header-right">
+                <button class="secondary" onclick="openItemsGuide()" style="margin-right: 10px;">📖 Справочник</button>
+                <button id="btnShowTrades" class="secondary" onclick="openIncomingTrades()">Обмен 🤝</button>
+                <button id="btnLogout" class="secondary">Выход</button>
             </div>
         </header>
 
@@ -28,40 +28,84 @@
             <aside class="inventory-panel card">
                 <h2>Инвентарь 🎒</h2>
                 <ul id="inventoryList" class="inventory-list">
-                    <li>Фонарик (Базовый)</li>
-                    <li>Компас (Базовый)</li>
-                    <li>Рация (Командная)</li>
+                    <li class="muted">Загрузка...</li>
                 </ul>
             </aside>
 
             <section class="map-window card">
-                <h2>Карта Мира 🗺️</h2>
+                <h2>Карта 🗺️</h2>
                 <div class="map-placeholder">
-                    <p>Игровая карта. Перемещение и ключевые точки.</p>
-                    <p>Текущее местоположение: Зимний Лес</p>
+                    <p>Здесь будет карта игрового мира.</p>
                 </div>
             </section>
 
             <section class="bottom-panel">
                 <div class="tasks-panel card">
-                    <h2>Активные Задания ✅</h2>
-                    <ul id="tasksList" class="tasks-list">
-                        <li>[Основное] Найти осколок кристалла в Ледяной пещере.</li>
-                        <li>[Ежедн.] Собрать 10 снежинок.</li>
-                    </ul>
-                </div>
-                
-                <div class="team-info-panel card">
-                    <h2>Состав команды (<strong id="myTeamMembersCount">0</strong>/<strong id="myTeamMaxCapacity">10</strong>)</h2>
-                    <ul id="currentTeamMembersList" class="member-list">
-                        </ul>
-
-                    <div id="teamActionsButtonContainer" class="hidden" style="margin-top: 20px; text-align: center;">
-                        <p class="muted">Команда полна! Управление завершено.</p>
+                    <h2 style="display:flex; justify-content:space-between; align-items:center;">
+                        Миссии 📜 
+                        <span id="taskProgress" style="font-size:0.8rem; opacity:0.7;">0%</span>
+                    </h2>
+                    <div class="tasks-container">
+                        <table class="tasks-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 30px;">✔</th>
+                                    <th>Задание</th>
+                                    <th style="width: 40px; text-align:center;">🎁</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tasksTableBody">
+                                <tr><td colspan="3" class="muted" style="padding:10px;">Загрузка...</td></tr>
+                            </tbody>
+                        </table>
                     </div>
+                </div>
+
+                <div class="team-info-panel card">
+                    <h2>Состав (<span id="myTeamMembersCount">0</span>/<span id="myTeamMaxCapacity">10</span>)</h2>
+                    <ul id="currentTeamMembersList" class="member-list"></ul>
                 </div>
             </section>
         </main>
+    </div>
+
+    <div id="itemsGuideModal" class="modal-backdrop hidden">
+        <div class="modal-content card" style="max-width: 600px;">
+            <button class="modal-close" onclick="closeItemsGuide()">✖</button>
+            <h3>Справочник Предметов</h3>
+            <div class="tasks-container">
+                <table class="tasks-table">
+                    <thead>
+                        <tr><th>Вид</th><th>Название</th><th>Описание</th></tr>
+                    </thead>
+                    <tbody id="itemsTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="tradeModal" class="modal-backdrop hidden">
+        <div class="modal-content card">
+            <button class="modal-close" onclick="closeTradeModal()">✖</button>
+            <h3>Предложить обмен</h3>
+            <p class="muted" style="margin-bottom: 10px;">Выберите команду и предмет:</p>
+            
+            <label>Кому:</label>
+            <select id="tradeTargetTeam" class="modal-input" style="margin-bottom: 15px;"></select>
+            
+            <label>Что отдать:</label>
+            <select id="tradeOfferSelect" class="modal-input"></select>
+            
+            <button class="start-button" onclick="sendTradeRequest()" style="margin-top: 20px;">Отправить</button>
+        </div>
+    </div>
+
+    <div id="incomingTradesModal" class="modal-backdrop hidden">
+        <div class="modal-content card">
+            <button class="modal-close" onclick="closeIncomingTrades()">✖</button>
+            <h3>Предложения</h3>
+            <div id="incomingTradesList"></div>
+        </div>
     </div>
 
     <script type="module" src="script.js"></script>

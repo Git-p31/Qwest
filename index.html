@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Хроники Затерянных Миров — Выбор Команды</title>
+    <title>Выбор Команды</title>
     <link rel="stylesheet" href="style.css" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
 </head>
@@ -12,74 +12,60 @@
 
     <div class="selection-wrap">
         <header>
-            <h1 class="game-title">Хроники Затерянных Миров ✨❄️</h1>
+            <h1 class="game-title">Хроники Миров ✨❄️</h1>
             <div id="status-selection" class="status-selection">Подключение...</div>
         </header>
 
         <section class="selection-card">
-            <h2 class="section-header">Выберите команду:</h2>
-            <div id="teamSelection" class="team-selection-grid">
-                </div>
+            <div class="garland-wrap">
+                <span class="bulb"></span><span class="bulb"></span><span class="bulb"></span>
+                <span class="bulb"></span><span class="bulb"></span><span class="bulb"></span><span class="bulb"></span>
+            </div>
 
-            <h2 class="section-header">Выберите роль:</h2>
+            <h2 style="font-size: 1rem; margin-bottom: 10px;">1. Выберите команду:</h2>
+            <div id="teamSelection" class="team-selection-grid"></div>
+
+            <h2 style="font-size: 1rem; margin-bottom: 10px;">2. Выберите роль:</h2>
             <div id="roleSelection" class="role-selection-grid">
-                <button class="role-card" data-role="Explorer">
-                    <span class="role-icon">🧭</span>
-                    Исследователь
-                </button>
-                <button class="role-card" data-role="Guardian">
-                    <span class="role-icon">🛡️</span>
-                    Хранитель
-                </button>
-                <button class="role-card" data-role="Saboteur">
-                    <span class="role-icon">💣</span>
-                    Диверсант
-                </button>
-                <button class="role-card" data-role="Negotiator">
-                    <span class="role-icon">🤝</span>
-                    Переговорщик
-                </button>
+                <button class="role-card" data-role="Explorer">🧭 Исследователь</button>
+                <button class="role-card" data-role="Guardian">🛡️ Хранитель</button>
+                <button class="role-card" data-role="Saboteur">💣 Диверсант</button>
+                <button class="role-card" data-role="Negotiator">🤝 Переговорщик</button>
             </div>
             
-            <div class="name-input-block">
-                <h2 class="section-header">Введите ваше имя:</h2>
-                <div class="name-input-container">
-                    <input id="nameInput" placeholder="Ваше уникальное имя" />
-                    <div id="authMsg" class="hint"></div>
-                    <button id="btnStartAdventure" disabled class="start-button">Начать приключение</button>
-                </div>
+            <div class="name-input-container">
+                <input id="nameInput" type="text" placeholder="Введите ваше имя" autocomplete="off" />
+                <div id="authMsg" class="hint"></div>
+                <button id="btnStartAdventure" disabled class="start-button">НАЧАТЬ ИГРУ</button>
             </div>
         </section>
     </div>
-<div id="teamModal" class="modal-backdrop hidden">
+
+    <div id="teamModal" class="modal-backdrop hidden">
         <div class="modal-content card">
             <button class="modal-close" onclick="closeModal()">✖</button>
-            <h2 id="modalTitle">Укажите данные команды</h2>
+            <h2 id="modalTitle">Настройка Команды</h2>
 
-            <div id="modalNamingSection">
-                <h3>Придумайте название:</h3>
-                <p class="muted">Ваше название заменит "Снежинки" и т.п.</p>
-                <input type="text" id="modalNewTeamNameInput" placeholder="Введите уникальное название" class="modal-input">
+            <div style="margin: 20px 0;">
+                <p class="muted" style="margin-bottom:5px;">Название команды:</p>
+                <input type="text" id="modalNewTeamNameInput" placeholder="Например: Ледяные Волки" class="modal-input">
             </div>
 
-            <hr style="border-color: rgba(255,255,255,0.1); margin: 20px 0;">
-
-            <h3>Селфи команды:</h3>
-            <div id="modalSelfieDisplay" style="margin-bottom: 15px;">
-                <p class="muted">Ваше селфи будет отображаться рядом с названием команды.</p>
+            <div id="modalSelfieDisplay" style="margin-bottom: 15px; text-align: center;">
+                <div style="width: 80px; height: 80px; background: rgba(255,255,255,0.1); border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; font-size: 2rem;">📸</div>
             </div>
             
-            <label for="modalSelfieUpload" class="start-button modal-button-full" style="background: linear-gradient(45deg, #a777f2, #e650d0);">
-                📸 Сделать/Загрузить Селфи
+            <label for="modalSelfieUpload" class="start-button modal-button-full" style="cursor: pointer;">
+                Загрузить Фото
             </label>
-            <input type="file" id="modalSelfieUpload" accept="image/*" capture="environment" class="hidden"> 
+            <input type="file" id="modalSelfieUpload" accept="image/*" class="hidden"> 
             
-            <button id="modalBtnFinish" class="start-button modal-button-full" style="margin-top: 20px;">
-                Сохранить и начать игру
+            <button id="modalBtnFinish" class="start-button modal-button-full" style="margin-top: 10px; background: var(--accent-cyan); color: #000;">
+                Сохранить
             </button>
         </div>
     </div>
-    
+
     <script type="module" src="script.js"></script>
 </body>
 </html>
