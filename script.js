@@ -27,9 +27,9 @@ let me = null;
 let selectedTeamId = null;
 let selectedRole = null;
 let currentTeam = null; 
-let tempSelfieUrl = null; // Временно храним URL селфи перед сохранением
+let tempSelfieUrl = null; 
 
-// ===== Helpers (Оставлены без изменений) =====
+// ===== Helpers и Snow Effect (Оставлены без изменений) =====
 function getStatusElement(){
     return document.getElementById('status') || document.getElementById('status-selection');
 }
@@ -57,7 +57,6 @@ async function checkLoginState(name) {
     return me;
 }
 
-// ===== Снежный эффект (Snow Effect) (Оставлен без изменений) =====
 function createSnowEffect() {
     const canvas = document.getElementById('snowCanvas');
     if (!canvas) return;
@@ -114,6 +113,7 @@ function createSnowEffect() {
         canvas.width = W;
         canvas.height = H;
     });
+
     setInterval(draw, 30);
 }
 
@@ -222,46 +222,50 @@ async function startAdventureAndOpenModal() {
     let playerId = existingPlayer?.id;
     let newRole = selectedRole;
     
+    // 1. Проверка на лидерство и существующие настройки команды
     const { count: memberCount } = await supabase.from('players').select('id', { count: 'exact', head: true }).eq('team_id', selectedTeamId);
-    
-    if (memberCount === 0) {
+    let isNewLeader = (memberCount === 0);
+
+    if (isNewLeader) {
         newRole = 'leader';
     } else if (existingPlayer && existingPlayer.role === 'leader' && existingPlayer.team_id === selectedTeamId) {
          newRole = 'leader'; 
     }
     
+    // 2. Выполняем регистрацию/вход в команду
     let dbAction = null;
-    let actionType = '';
-
     if (playerId) {
         dbAction = supabase.from('players').update({ team_id: selectedTeamId, role: newRole }).eq('id', playerId).select();
-        actionType = 'Обновление';
     } else {
         dbAction = supabase.from('players').insert({ name, team_id: selectedTeamId, role: newRole }).select();
-        actionType = 'Регистрация';
     }
     const { data, error } = await dbAction;
     
-    if (error) {
-        showAuthMsg(`${actionType} не удалось: ` + (error.message || JSON.stringify(error)), true);
+    if (error || !data || data.length === 0) {
+        showAuthMsg(`Ошибка входа: ` + (error?.message || 'Неизвестная ошибка'), true);
         setStatus('Ошибка приключения.', false);
         return;
-    }
-    if (!data || data.length === 0) {
-        showAuthMsg(`Не удалось выполнить ${actionType}.`, true); return;
     }
 
     me = data[0];
     localStorage.setItem('playerName', me.name);
     
-    // Получаем данные команды для модального окна
-    const { data: teamData } = await supabase.from('teams').select('name').eq('id', selectedTeamId).single();
+    // 3. Получаем данные команды, чтобы проверить персонализацию
+    const { data: teamData } = await supabase.from('teams').select('name, name_by_leader, selfie_url').eq('id', selectedTeamId).single();
     if(teamData) currentTeam = teamData;
     
-    setStatus('Игрок зарегистрирован. Открытие настройки команды...', true);
-    
-    // Открываем модальное окно для ввода названия/селфи
-    openModalSetup();
+    const isCustomized = currentTeam.name_by_leader || currentTeam.selfie_url;
+
+    // 4. ГЛАВНАЯ ЛОГИКА ПРОПУСКА МОДАЛЬНОГО ОКНА
+    if (!me || me.role !== 'leader' || isCustomized) {
+        // Если: не лидер ИЛИ команда уже настроена -> пропускаем модальное окно и сразу в игру
+        setStatus('Команда уже настроена или вы не лидер. Переход в игру...', true);
+        window.location.href = 'main-screen.html';
+    } else {
+        // Если: вы ЛИДЕР И команда НЕ настроена -> открываем модальное окно
+        setStatus('Игрок зарегистрирован. Открытие настройки команды...', true);
+        openModalSetup();
+    }
 }
 
 async function handleSelfieUploadModal(event) {
@@ -321,7 +325,6 @@ async function finalizeTeamSetup() {
         updateData.selfie_url = tempSelfieUrl;
     }
     
-    // Проверка, что игрок имеет права лидера или является первым игроком (чтобы избежать RLS ошибки)
     if (me.role !== 'leader') {
         alert('У вас нет прав лидера, чтобы устанавливать название и селфи.');
         return;
@@ -359,10 +362,13 @@ function openModalSetup() {
 
 function closeModal() {
     document.getElementById('teamModal')?.classList.add('hidden');
+    // Если лидер закрыл модальное окно без сохранения, он должен вернуться в игру
+    // Но название и селфи останутся стандартными.
+    window.location.href = 'main-screen.html'; 
 }
 
 
-// ===== ЛОГИКА ИГРОВОГО ЭКРАНА (main-screen.html) =====
+// ===== ЛОГИКА ИГРОВОГО ЭКРАНА (main-screen.html) - Без изменений, кроме RLS) =====
 
 function initGameScreen() {
     const storedName = localStorage.getItem('playerName');
