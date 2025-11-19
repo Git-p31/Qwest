@@ -268,3 +268,23 @@ button.secondary:hover{background:rgba(255,255,255,0.2);}
     .start-button{ font-size: 1rem; padding: 12px 20px;}
     .name-input-container { max-width: 100%; }
 }
+/* style.css: Добавьте или обновите этот стиль */
+
+.team-block .team-selfie {
+    width: 30px; /* Размер, заданный в JS */
+    height: 30px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 8px;
+    vertical-align: middle; /* Базовое выравнивание */
+}
+
+/* Обновляем strong, чтобы он также был выровнен */
+.team-block strong {
+    color: var(--accent); 
+    font-size: 1.2rem; 
+    margin-right: 8px; /* Уменьшаем отступ, так как селфи уже дает отступ */
+    /* Важно: делаем его display: inline-flex для Flex-выравнивания, если это отдельный элемент */
+    display: inline-flex;
+    align-items: center; /* Центрируем, если внутри strong есть другие элементы */
+}

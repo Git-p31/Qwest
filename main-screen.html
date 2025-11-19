@@ -57,38 +57,11 @@
                         </ul>
 
                     <div id="teamActionsButtonContainer" class="hidden" style="margin-top: 20px; text-align: center;">
-                        <button id="btnOpenModal" class="start-button" style="width: 80%; padding: 12px 20px; font-size: 1rem;">
-                            Действия Лидера 🛠️
-                        </button>
+                        <p class="muted">Команда полна! Управление завершено.</p>
                     </div>
                 </div>
             </section>
         </main>
-    </div>
-
-    <div id="teamModal" class="modal-backdrop hidden">
-        <div class="modal-content card">
-            <button class="modal-close" onclick="closeModal()">✖</button>
-            <h2 id="modalTitle">Действия команды</h2>
-
-            <div id="modalNamingSection">
-                <h3>Придумайте название:</h3>
-                <input type="text" id="modalNewTeamNameInput" placeholder="Введите уникальное название" class="modal-input">
-                <button id="modalBtnSaveTeamName" class="start-button modal-button-full" style="background: linear-gradient(45deg, var(--accent), #ffd66b);">Сохранить название</button>
-            </div>
-
-            <hr style="border-color: rgba(255,255,255,0.1); margin: 20px 0;">
-
-            <h3>Селфи команды:</h3>
-            <div id="modalSelfieDisplay" style="margin-bottom: 15px;">
-                </div>
-            
-            <label for="modalSelfieUpload" class="start-button modal-button-full" style="background: linear-gradient(45deg, #a777f2, #e650d0);">
-                📸 Сделать/Загрузить Селфи
-            </label>
-            <input type="file" id="modalSelfieUpload" accept="image/*" capture="environment" class="hidden"> 
-
-        </div>
     </div>
 
     <script type="module" src="script.js"></script>

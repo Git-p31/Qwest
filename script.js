@@ -3,8 +3,10 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 // ===== CONFIG (ВАШИ КЛЮЧИ) =====
 const SUPABASE_URL = 'https://akvvvudcnjnevkzxnfoi.supabase.co'; 
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrdnZ2dWRjbmpuZXZrenhuZm9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1NDMyNDQsImV4cCI6MjA3OTExOTI0NH0.pOA1Ebemf3IYY4ckaDQ31uDr8jMBljAzcnai_MWr2pY';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrdnZ2dWRjbmpuZXZrenhuZm9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1NDMyNDQsImV4cCI6MjA3OTExOTI0NH0.pOA1Ebemf3IYY4ckaDQ31uDr8jMBljAzcnai_MWr2pY'; 
+const BUCKET_NAME = 'team_selfies'; // Имя бакета для селфи
 
+// Инициализация Supabase
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ===== КОНСТАНТЫ КОМАНД И РОЛЕЙ =====
@@ -29,7 +31,7 @@ let selectedRole = null;
 let currentTeam = null; 
 let tempSelfieUrl = null; 
 
-// ===== Helpers и Snow Effect (Оставлены без изменений) =====
+// ===== Helpers (Оставлены без изменений) =====
 function getStatusElement(){
     return document.getElementById('status') || document.getElementById('status-selection');
 }
@@ -57,6 +59,7 @@ async function checkLoginState(name) {
     return me;
 }
 
+// ===== Снежный эффект (Snow Effect) (Оставлен без изменений) =====
 function createSnowEffect() {
     const canvas = document.getElementById('snowCanvas');
     if (!canvas) return;
@@ -118,6 +121,35 @@ function createSnowEffect() {
 }
 
 
+// === МОДАЛЬНЫЕ ФУНКЦИИ (ГЛОБАЛЬНЫЙ SCOPE) ===
+
+function openModalSetup() {
+    const teamInfo = TEAMS_DATA.find(t => t.id === me.team_id);
+    const modalTitle = document.getElementById('modalTitle');
+    const selfieDisplay = document.getElementById('modalSelfieDisplay');
+    
+    if(modalTitle) modalTitle.textContent = `Добро пожаловать в команду ${teamInfo?.name || '—'}!`;
+    
+    if (selfieDisplay) {
+        selfieDisplay.innerHTML = '<p class="muted" style="font-size: 13px;">Сделайте селфи, чтобы персонализировать команду.</p>';
+    }
+    tempSelfieUrl = null; 
+    document.getElementById('modalNewTeamNameInput').value = '';
+    
+    document.getElementById('teamModal')?.classList.remove('hidden');
+}
+
+function closeModal() {
+    document.getElementById('teamModal')?.classList.add('hidden');
+    // Переход в игру, если пользователь закрыл окно до сохранения
+    if (window.location.pathname.includes('index.html')) {
+        window.location.href = 'main-screen.html'; 
+    }
+}
+// !!! ИСПРАВЛЕНИЕ: Привязка глобальных функций к window
+window.closeModal = closeModal; 
+// openModalSetup не нужно привязывать, т.к. оно вызывается только из JS
+
 // ===== ЛОГИКА ЭКРАНА ВЫБОРА (index.html) =====
 
 function initSelectionScreen() {
@@ -126,7 +158,7 @@ function initSelectionScreen() {
     const teamGrid = document.getElementById('teamSelection');
     const roleGrid = document.getElementById('roleSelection');
     
-    // Новые ссылки для модального окна
+    // Ссылки для модального окна
     const btnFinish = document.getElementById('modalBtnFinish');
     const selfieUpload = document.getElementById('modalSelfieUpload');
 
@@ -140,11 +172,9 @@ function initSelectionScreen() {
         nameInput.value = storedName;
         checkLoginState(storedName).then(player => {
             if (player && player.team_id) {
-                // Если игрок уже в команде, пропускаем выбор и сразу переходим в игру
                 window.location.href = 'main-screen.html'; 
                 return;
             }
-            // Предварительный выбор
             if (player && player.team_id && player.role) {
                 selectedTeamId = player.team_id;
                 selectedRole = player.role !== 'leader' ? player.role : 'Explorer'; 
@@ -185,7 +215,6 @@ function initSelectionScreen() {
     // Обработчики модального окна
     btnFinish?.addEventListener('click', finalizeTeamSetup);
     selfieUpload?.addEventListener('change', handleSelfieUploadModal);
-    window.closeModal = closeModal;
     
     setStatus('Готово к выбору команды и роли.');
 }
@@ -209,7 +238,7 @@ function updateStartButton() {
     }
 }
 
-// *** НОВАЯ ЛОГИКА: Регистрация + Открытие модального окна ***
+// *** ЛОГИКА АВТОМАТИЧЕСКОГО ПЕРЕХОДА ИЛИ ОТКРЫТИЯ МОДАЛЬНОГО ОКНА ***
 async function startAdventureAndOpenModal() {
     const name = document.getElementById('nameInput')?.value.trim();
     if (!name || !selectedTeamId || !selectedRole) {
@@ -222,7 +251,7 @@ async function startAdventureAndOpenModal() {
     let playerId = existingPlayer?.id;
     let newRole = selectedRole;
     
-    // 1. Проверка на лидерство и существующие настройки команды
+    // 1. Проверка на лидерство
     const { count: memberCount } = await supabase.from('players').select('id', { count: 'exact', head: true }).eq('team_id', selectedTeamId);
     let isNewLeader = (memberCount === 0);
 
@@ -256,13 +285,12 @@ async function startAdventureAndOpenModal() {
     
     const isCustomized = currentTeam.name_by_leader || currentTeam.selfie_url;
 
-    // 4. ГЛАВНАЯ ЛОГИКА ПРОПУСКА МОДАЛЬНОГО ОКНА
-    if (!me || me.role !== 'leader' || isCustomized) {
-        // Если: не лидер ИЛИ команда уже настроена -> пропускаем модальное окно и сразу в игру
-        setStatus('Команда уже настроена или вы не лидер. Переход в игру...', true);
+    // 4. ЛОГИКА: если не лидер И команда уже настроена -> сразу в игру
+    if (me.role !== 'leader' && isCustomized) {
+        setStatus('Команда уже настроена. Переход в игру...', true);
         window.location.href = 'main-screen.html';
     } else {
-        // Если: вы ЛИДЕР И команда НЕ настроена -> открываем модальное окно
+        // Если: вы ЛИДЕР ИЛИ команда НЕ настроена -> открываем модальное окно
         setStatus('Игрок зарегистрирован. Открытие настройки команды...', true);
         openModalSetup();
     }
@@ -282,27 +310,27 @@ async function handleSelfieUploadModal(event) {
     }
     
     const teamId = me.team_id;
-    const filePath = `${teamId}/selfie_${Date.now()}.png`;
+    const filePath = `${teamId}/selfie_${me.id}_${Date.now()}.png`;
 
     setStatus('Загружаю селфи в хранилище...');
 
-    const { error: uploadError } = await supabase.storage.from('team_selfies').upload(filePath, file, {
+    const { error: uploadError } = await supabase.storage.from(BUCKET_NAME).upload(filePath, file, {
         cacheControl: '3600',
-        upsert: false,
+        upsert: true,
     });
 
     if (uploadError) {
-        setStatus('Ошибка загрузки селфи: ' + uploadError.message, false);
+        setStatus(`Ошибка загрузки селфи: ${uploadError.message}. Проверьте RLS Storage!`, false);
         return;
     }
     
-    const { data: publicURLData } = supabase.storage.from('team_selfies').getPublicUrl(filePath);
+    const { data: publicURLData } = supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath);
     tempSelfieUrl = publicURLData.publicUrl;
 
     const selfieDisplay = document.getElementById('modalSelfieDisplay');
     if (selfieDisplay) {
         selfieDisplay.innerHTML = `
-            <p style="color: #6eff9f;">✅ Селфи загружено! (Нажмите "Сохранить", чтобы увидеть его в игре)</p>
+            <p style="color: #6eff9f;">✅ Селфи загружено! (Нажмите "Сохранить и начать игру")</p>
             <img src="${tempSelfieUrl}" alt="Селфи команды" style="width: 100px; height: 100px; object-fit: cover; border-radius: 50%; border: 2px solid var(--accent);">
         `;
     }
@@ -325,6 +353,7 @@ async function finalizeTeamSetup() {
         updateData.selfie_url = tempSelfieUrl;
     }
     
+    // Проверка прав (должен быть лидером, чтобы настроить команду)
     if (me.role !== 'leader') {
         alert('У вас нет прав лидера, чтобы устанавливать название и селфи.');
         return;
@@ -338,37 +367,36 @@ async function finalizeTeamSetup() {
     }
     
     setStatus('Данные команды сохранены! Начинаем игру...');
-    closeModal();
-    window.location.href = 'main-screen.html';
+    closeModal(); // Закроет модальное окно и выполнит переход в игре
+    window.location.href = 'main-screen.html'; // Явно перенаправляем после успешного сохранения
 }
 
-// === МОДАЛЬНЫЕ ФУНКЦИИ ===
 
-function openModalSetup() {
-    const teamInfo = TEAMS_DATA.find(t => t.id === me.team_id);
-    const modalTitle = document.getElementById('modalTitle');
-    const selfieDisplay = document.getElementById('modalSelfieDisplay');
-    
-    if(modalTitle) modalTitle.textContent = `Добро пожаловать в команду ${teamInfo?.name || '—'}!`;
-    
-    if (selfieDisplay) {
-        selfieDisplay.innerHTML = '<p class="muted" style="font-size: 13px;">Сделайте селфи, чтобы персонализировать команду.</p>';
+// ===== ЛОГИКА ИГРОВОГО ЭКРАНА (main-screen.html) - Не изменена =====
+
+async function removePlayerFromTeam(playerId) {
+    if (!me || me.role !== 'leader' || !currentTeam) {
+        setStatus('Ошибка прав доступа. Вы не лидер.', false);
+        return;
     }
-    tempSelfieUrl = null; 
-    document.getElementById('modalNewTeamNameInput').value = '';
     
-    document.getElementById('teamModal')?.classList.remove('hidden');
+    if (!confirm('Вы уверены, что хотите удалить этого игрока из команды?')) {
+        return;
+    }
+
+    setStatus('Удаляю игрока из команды...');
+    
+    const { error } = await supabase.from('players')
+        .update({ team_id: null, role: 'Explorer' })
+        .eq('id', playerId);
+
+    if (error) {
+        setStatus('Ошибка при удалении: ' + error.message, false);
+        console.error('Ошибка удаления игрока:', error);
+    } else {
+        setStatus('Игрок успешно удален.', true);
+    }
 }
-
-function closeModal() {
-    document.getElementById('teamModal')?.classList.add('hidden');
-    // Если лидер закрыл модальное окно без сохранения, он должен вернуться в игру
-    // Но название и селфи останутся стандартными.
-    window.location.href = 'main-screen.html'; 
-}
-
-
-// ===== ЛОГИКА ИГРОВОГО ЭКРАНА (main-screen.html) - Без изменений, кроме RLS) =====
 
 function initGameScreen() {
     const storedName = localStorage.getItem('playerName');
@@ -391,7 +419,7 @@ function initGameScreen() {
         
         refreshMyTeamDetails(player);
         
-        // Подписка на изменения в Supabase в реальном времени
+        // Подписка на изменения
         supabase
             .channel(`team:${player.team_id}`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `team_id=eq.${player.team_id}` }, () => {
@@ -406,16 +434,16 @@ function initGameScreen() {
         document.getElementById('btnLogout')?.addEventListener('click', logoutHandler);
         
         // Обработчики для модального окна (Если вдруг модальное окно нужно будет открыть на этом экране)
-        document.getElementById('btnOpenModal')?.addEventListener('click', openModal);
-        document.getElementById('modalBtnSaveTeamName')?.addEventListener('click', saveTeamName);
-        document.getElementById('modalSelfieUpload')?.addEventListener('change', handleSelfieUpload);
-        window.closeModal = closeModal;
+        // NOTE: Кнопки модального окна на main-screen.html удалены, поэтому эти обработчики не сработают.
+        // Если вы решите вернуть модальное окно на main-screen.html, верните кнопки.
+        // window.closeModal здесь не используется для кнопки Х, т.к. ее нет.
         
         setStatus('Игровое окно загружено.');
     });
 }
 
 async function refreshMyTeamDetails(player) {
+    // ... (вся логика main-screen.html) ...
     if (!player || !player.team_id) return;
 
     const myTeamNameEl = document.getElementById('myTeamName');
@@ -441,13 +469,19 @@ async function refreshMyTeamDetails(player) {
     // 2. Обновление заголовка
     const teamInfo = TEAMS_DATA.find(t => t.id === player.team_id);
     const displayName = teamData.name_by_leader || teamData.name;
-    if(myTeamNameEl) myTeamNameEl.textContent = `${displayName} ${teamInfo?.symbol || ''}`;
+    let headerHtml = `${displayName} ${teamInfo?.symbol || ''}`;
+
+    if (teamData.selfie_url) {
+        headerHtml = `<img src="${teamData.selfie_url}" style="width: 30px; height: 30px; border-radius: 50%; object-fit: cover; margin-right: 8px;"> ${headerHtml}`;
+    }
+
+    if(myTeamNameEl) myTeamNameEl.innerHTML = headerHtml; 
     if(myPlayerRoleEl) myPlayerRoleEl.textContent = `Роль: ${ROLES_DATA[player.role] || player.role}`;
     if(myTeamMaxCapacityEl) myTeamMaxCapacityEl.textContent = teamData.max_capacity;
 
     // 3. Получение и отображение состава
     const { data: members, error: membersError } = await supabase.from('players')
-        .select('name, role')
+        .select('id, name, role') 
         .eq('team_id', player.team_id)
         .order('role', { ascending: false, nullsFirst: false }); 
         
@@ -457,23 +491,43 @@ async function refreshMyTeamDetails(player) {
         return;
     }
 
+    const isCurrentUserLeader = player.role === 'leader';
     if(myTeamMembersCountEl) myTeamMembersCountEl.textContent = members.length;
     if(currentTeamMembersListEl) currentTeamMembersListEl.innerHTML = '';
+    
     members.forEach(member => {
         const li = document.createElement('li');
-        li.textContent = escapeHtml(member.name);
+        let content = escapeHtml(member.name);
+        if (member.role === 'leader') content += ' ✨';
+        
+        if (isCurrentUserLeader && member.name !== player.name) {
+            content += ` <button class="remove-btn" data-player-id="${member.id}">✖</button>`;
+        }
+        
+        li.innerHTML = content;
+        li.className = 'member-item';
         if(member.role === 'leader') li.classList.add('leader');
         if(member.name === player.name) li.classList.add('me');
         if(currentTeamMembersListEl) currentTeamMembersListEl.appendChild(li);
     });
 
-    // 4. Логика отображения кнопки модального окна (Если лидер и команда полна)
+    document.querySelectorAll('.remove-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const playerIdToRemove = e.target.dataset.playerId;
+            removePlayerFromTeam(parseInt(playerIdToRemove));
+        });
+    });
+
+
+    // 4. Логика отображения кнопки "Действия Лидера" (main-screen.html)
     const isTeamFull = members.length === teamData.max_capacity;
     const isLeader = player.role === 'leader';
     
+    // На main-screen кнопка просто отображает статус полной команды
     if (teamActionsButtonContainer) {
       if (isTeamFull && isLeader) { 
           teamActionsButtonContainer.classList.remove('hidden');
+          teamActionsButtonContainer.innerHTML = '<p class="muted" style="color: var(--accent2);">Управление командой завершено!</p>';
       } else {
           teamActionsButtonContainer.classList.add('hidden');
       }
