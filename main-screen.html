@@ -10,6 +10,11 @@
 <body class="game-body">
     <canvas id="snowCanvas"></canvas>
     
+    <div id="lastChanceTimer" class="hidden">
+        <span>⚠️ ПОСЛЕДНИЙ ШАНС: </span>
+        <span id="timerCountdown">05:00</span>
+    </div>
+
     <div class="game-wrap">
         <header class="game-header">
             <div class="header-left">
@@ -117,6 +122,19 @@
                 <button class="modal-close" onclick="closeIncomingTrades()">×</button>
             </div>
             <div id="incomingTradesList"></div>
+        </div>
+    </div>
+
+    <div id="endGameModal" class="modal-backdrop hidden" style="z-index: 20000;">
+        <div class="modal-content" style="text-align: center; border: 2px solid var(--accent-gold);">
+            <h1 id="endTitle" style="font-size: 2rem; margin-bottom: 10px; text-transform: uppercase;"></h1>
+            <p id="endMessage" style="font-size: 1.1rem; color: var(--text-main); margin-bottom: 20px; line-height: 1.5;"></p>
+            <div id="winnersListBlock" class="hidden" style="margin: 15px 0; padding: 15px; background: rgba(255,215,0,0.1); border: 1px solid var(--accent-gold); border-radius: 10px;">
+                <h3 style="color: var(--accent-gold); margin:0; font-size: 1rem;">🏆 ПЕРВЫЕ МЕСТА:</h3>
+                <p id="winnersNames" style="font-size: 1.3rem; font-weight: 900; color: #fff; margin-top: 5px; text-shadow: 0 2px 10px rgba(0,0,0,0.5);"></p>
+            </div>
+            <p style="font-style: italic; color: var(--accent-cyan); margin-top: 20px; font-size: 1rem;">📍 Проследуйте на финальную локацию!</p>
+            <button id="btnCloseModal" class="start-button hidden" onclick="document.getElementById('endGameModal').classList.add('hidden')">Понятно</button>
         </div>
     </div>
 

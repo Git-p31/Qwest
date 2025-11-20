@@ -1,4 +1,4 @@
-// game.js — Standard Logic (No Timer, No Complex End Game)
+// game.js
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 // CONFIG
@@ -21,6 +21,11 @@ let me = null;
 let currentTeam = null; 
 let GLOBAL_ITEMS = {}; 
 
+// Флаги финала
+let hasShownVictory = false; 
+let hasShownGameOver = false; 
+let timerInterval = null;
+
 // ===== INIT =====
 async function initGame() {
     const storedName = localStorage.getItem('playerName');
@@ -42,6 +47,7 @@ async function initGame() {
 
     await refreshTeamData();
     setupSubscriptions();
+    checkGlobalGameState();
     createSnowEffect();
 }
 
@@ -51,6 +57,7 @@ function setupSubscriptions() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'teams', filter: `id=eq.${me.team_id}`}, payload => { 
             currentTeam = {...currentTeam, ...payload.new}; 
             renderGameInterface(); 
+            checkGlobalGameState();
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `team_id=eq.${me.team_id}`}, () => refreshTeamData())
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trades', filter: `to_team_id=eq.${me.team_id}`}, () => {
@@ -60,6 +67,94 @@ function setupSubscriptions() {
             }
         })
         .subscribe();
+
+    supabase.channel('global_state')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => {
+            checkGlobalGameState();
+        })
+        .subscribe();
+}
+
+// ===== FINAL LOGIC =====
+async function checkGlobalGameState() {
+    const { data: teams } = await supabase.from('teams').select('*').order('updated_at', { ascending: true });
+    if (!teams) return;
+
+    const winners = teams.filter(t => t.tasks && t.tasks.length > 0 && t.tasks.every(task => task.completed));
+    
+    const modal = document.getElementById('endGameModal');
+    const title = document.getElementById('endTitle');
+    const msg = document.getElementById('endMessage');
+    const winListBlock = document.getElementById('winnersListBlock');
+    const winListText = document.getElementById('winnersNames');
+    const content = modal.querySelector('.modal-content');
+    const btnClose = document.getElementById('btnCloseModal');
+    const timerDiv = document.getElementById('lastChanceTimer');
+    const timerText = document.getElementById('timerCountdown');
+
+    const myIndexInWinners = winners.findIndex(w => w.id === me.team_id);
+    const amIWinner = myIndexInWinners !== -1;
+
+    if (amIWinner && !hasShownVictory) {
+        modal.classList.remove('hidden');
+        winListBlock.classList.add('hidden');
+        timerDiv.classList.add('hidden');
+        if(timerInterval) clearInterval(timerInterval);
+        btnClose.classList.remove('hidden');
+
+        if (myIndexInWinners < 2) {
+            content.className = "modal-content pulse-gold";
+            title.textContent = `👑 ВЫ ТОП-${myIndexInWinners + 1}!`;
+            title.style.color = "var(--accent-gold)";
+            msg.innerHTML = `Поздравляем! Вы заняли призовое место.<br>Пройдите на финальную локацию.`;
+        } else {
+            content.className = "modal-content pulse-green";
+            title.textContent = `🚀 УСПЕЛИ!`;
+            title.style.color = "var(--accent-cyan)";
+            msg.innerHTML = `Вы успели в последний момент!<br>Бегите на финал!`;
+        }
+        hasShownVictory = true;
+        return;
+    }
+
+    if (!amIWinner) {
+        if (winners.length < 2) {
+            timerDiv.classList.add('hidden');
+            return;
+        }
+
+        const secondWinnerTime = new Date(winners[1].updated_at).getTime();
+        const DEADLINE_MS = 5 * 60 * 1000;
+        const deadlineTime = secondWinnerTime + DEADLINE_MS;
+        const now = Date.now();
+
+        if (now < deadlineTime) {
+            timerDiv.classList.remove('hidden');
+            const diff = deadlineTime - now;
+            const m = Math.floor(diff / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+            timerText.textContent = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+
+            if (!timerInterval) timerInterval = setInterval(() => checkGlobalGameState(), 1000);
+        } else {
+            if(timerInterval) clearInterval(timerInterval);
+            timerDiv.classList.add('hidden');
+
+            if (!hasShownGameOver) {
+                modal.classList.remove('hidden');
+                content.className = "modal-content pulse-red";
+                btnClose.classList.add('hidden');
+                title.textContent = "☠️ ИГРА ОКОНЧЕНА";
+                title.style.color = "var(--accent-red)";
+                msg.innerHTML = `Время вышло.`;
+                
+                const top2Names = winners.slice(0, 2).map(w => w.name_by_leader || w.name).join(' и ');
+                winListText.textContent = top2Names;
+                winListBlock.classList.remove('hidden');
+                hasShownGameOver = true;
+            }
+        }
+    }
 }
 
 // ===== RENDER =====
@@ -86,7 +181,7 @@ function renderGameInterface() {
         if(inv[id] > 0) {
             hasItems = true;
             const item = GLOBAL_ITEMS[id] || {name:'???', emoji:'📦'};
-            list.innerHTML += `<li><span>${item.emoji} ${item.name}</span><span class="inv-count">x${inv[id]}</span></li>`;
+            list.innerHTML += `<li><div style="display:flex;align-items:center;gap:10px;"><span style="font-size:1.4rem">${item.emoji}</span> <span>${item.name}</span></div><span class="inv-count">x${inv[id]}</span></li>`;
         }
     });
     if(!hasItems) list.innerHTML = '<li class="muted">Пусто...</li>';
@@ -120,6 +215,7 @@ function renderGameInterface() {
 
         const isChecked = task.completed ? 'checked disabled' : '';
         const isDisabled = !canCheck ? 'disabled' : '';
+        // ВАЖНО: Мы передаем 'this' (элемент чекбокса) чтобы управлять им
         const checkbox = `<input type="checkbox" class="task-check-input" ${isChecked} ${isDisabled} onclick="toggleTask(${task.id}, this)">`;
         const reward = task.type === 'reward' && task.reward_item_id ? (GLOBAL_ITEMS[task.reward_item_id]?.emoji || '🎁') : '';
 
@@ -131,9 +227,17 @@ function renderGameInterface() {
     renderMembers();
 }
 
+// === ЛОГИКА СДАЧИ (БЕЗ CONFIRM) ===
 window.toggleTask = async (taskId, checkboxEl) => {
+    // Если игра окончена
+    if(hasShownGameOver) { 
+        alert('Игра окончена!'); 
+        checkboxEl.checked = false; 
+        return; 
+    }
+    
     if(me.role !== 'leader') { 
-        checkboxEl.checked = !checkboxEl.checked; // Отменяем нажатие
+        checkboxEl.checked = !checkboxEl.checked; 
         return; 
     }
 
@@ -141,6 +245,7 @@ window.toggleTask = async (taskId, checkboxEl) => {
     const inv = { ...currentTeam.inventory };
     const isChecked = checkboxEl.checked;
 
+    // Проверка предмета
     if(task.type === 'requirement' && isChecked) {
         if((inv[task.required_item_id] || 0) < 1) { 
             alert('У вас нет нужного предмета!'); 
@@ -148,6 +253,7 @@ window.toggleTask = async (taskId, checkboxEl) => {
             renderGameInterface(); 
             return; 
         }
+        // Списываем предмет сразу, без подтверждения (чтобы не зависало)
         inv[task.required_item_id]--;
     }
 
@@ -160,8 +266,10 @@ window.toggleTask = async (taskId, checkboxEl) => {
     const newTasks = currentTeam.tasks.map(t => t.id === taskId ? {...t, completed: isChecked} : t);
     currentTeam.tasks = newTasks; 
     currentTeam.inventory = inv;
-    renderGameInterface();
+    
+    renderGameInterface(); // Обновляем UI сразу
 
+    // Сохраняем в БД
     await supabase.from('teams').update({ tasks: newTasks, inventory: inv }).eq('id', me.team_id);
 };
 
