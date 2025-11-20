@@ -2,9 +2,9 @@
 <html lang="ru">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Игровое окно</title>
-    <link rel="stylesheet" href="style.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+    <title>Stuttgart Talks: Game</title>
+    <link rel="stylesheet" href="main.css" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
 </head>
 <body class="game-body">
@@ -13,29 +13,33 @@
     <div class="game-wrap">
         <header class="game-header">
             <div class="header-left">
-                <span id="myNameHeader" class="player-name-header">...</span>
-                в <strong id="myTeamName">...</strong>
-                <span id="myPlayerRole" class="player-role">...</span>
+                <div class="avatar-circle" id="myTeamAvatar"></div>
+                <div>
+                    <span id="myNameHeader" class="player-name-header">...</span>
+                    <div style="font-size: 0.8rem; opacity: 0.8;">
+                        <strong id="myTeamName">...</strong> • <span id="myPlayerRole">...</span>
+                    </div>
+                </div>
             </div>
             <div class="header-right">
-                <button class="secondary" onclick="openItemsGuide()" style="margin-right: 10px;">📖 Справочник</button>
-                <button id="btnShowTrades" class="secondary" onclick="openIncomingTrades()">Обмен 🤝</button>
-                <button id="btnLogout" class="secondary">Выход</button>
+                <button class="icon-btn" onclick="openItemsGuide()">📖</button>
+                <button id="btnShowTrades" class="secondary hidden" onclick="openIncomingTrades()">Обмен 🤝</button>
+                <button id="btnLogout" class="icon-btn" style="color:var(--accent-red)">🚪</button>
             </div>
         </header>
 
         <main class="game-main">
             <aside class="inventory-panel card">
-                <h2>Инвентарь 🎒</h2>
+                <h2>🎒 Рюкзак</h2>
                 <ul id="inventoryList" class="inventory-list">
-                    <li class="muted">Загрузка...</li>
+                    <li class="muted">Пусто...</li>
                 </ul>
             </aside>
 
             <section class="map-window card">
-                <h2>Карта 🗺️</h2>
+                <h2>🗺️ Локация</h2>
                 <div class="map-placeholder">
-                    <p>Здесь будет карта игрового мира.</p>
+                    <p>Карта местности</p>
                 </div>
             </section>
 
@@ -43,15 +47,15 @@
                 <div class="tasks-panel card">
                     <h2 style="display:flex; justify-content:space-between; align-items:center;">
                         Миссии 📜 
-                        <span id="taskProgress" style="font-size:0.8rem; opacity:0.7;">0%</span>
+                        <span id="taskProgress" style="font-size:0.9rem; color:var(--accent-cyan)">0%</span>
                     </h2>
                     <div class="tasks-container">
                         <table class="tasks-table">
                             <thead>
                                 <tr>
                                     <th style="width: 30px;">✔</th>
-                                    <th>Задание</th>
-                                    <th style="width: 40px; text-align:center;">🎁</th>
+                                    <th>Цель</th>
+                                    <th style="width: 30px; text-align:center;">🎁</th>
                                 </tr>
                             </thead>
                             <tbody id="tasksTableBody">
@@ -62,7 +66,7 @@
                 </div>
 
                 <div class="team-info-panel card">
-                    <h2>Состав (<span id="myTeamMembersCount">0</span>/<span id="myTeamMaxCapacity">10</span>)</h2>
+                    <h2>Состав (<span id="myTeamMembersCount">0</span>)</h2>
                     <ul id="currentTeamMembersList" class="member-list"></ul>
                 </div>
             </section>
@@ -70,14 +74,14 @@
     </div>
 
     <div id="itemsGuideModal" class="modal-backdrop hidden">
-        <div class="modal-content card" style="max-width: 600px;">
-            <button class="modal-close" onclick="closeItemsGuide()">✖</button>
-            <h3>Справочник Предметов</h3>
-            <div class="tasks-container">
+        <div class="modal-content">
+            <div class="modal-header-strip"></div>
+            <div class="modal-top-row">
+                <h3 class="modal-title">📖 ПРЕДМЕТЫ</h3>
+                <button class="modal-close" onclick="closeItemsGuide()">×</button>
+            </div>
+            <div class="tasks-container" style="max-height: 400px; overflow-y: auto;">
                 <table class="tasks-table">
-                    <thead>
-                        <tr><th>Вид</th><th>Название</th><th>Описание</th></tr>
-                    </thead>
                     <tbody id="itemsTableBody"></tbody>
                 </table>
             </div>
@@ -85,31 +89,37 @@
     </div>
 
     <div id="tradeModal" class="modal-backdrop hidden">
-        <div class="modal-content card">
-            <button class="modal-close" onclick="closeTradeModal()">✖</button>
-            <h3>Предложить обмен 🤝</h3>
+        <div class="modal-content">
+             <div class="modal-header-strip"></div>
+             <div class="modal-top-row">
+                <h3 class="modal-title">🤝 ПРЕДЛОЖИТЬ</h3>
+                <button class="modal-close" onclick="closeTradeModal()">×</button>
+            </div>
             
-            <label style="display:block; margin-top:10px; color:var(--testosterose);">1. С кем меняемся:</label> 
+            <label class="label-accent">1. Кому:</label> 
             <select id="tradeTargetTeam" class="modal-input"></select>
             
-            <label style="display:block; margin-top:10px; color:var(--accent-cyan);">2. Вы отдаете:</label> 
+            <label class="label-accent" style="color:var(--accent-cyan)">2. Отдаем:</label> 
             <select id="tradeOfferSelect" class="modal-input"></select>
             
-            <label style="display:block; margin-top:10px; color:var(--accent-gold);">3. Вы получаете взамен:</label> 
+            <label class="label-accent" style="color:var(--accent-gold)">3. Просим:</label> 
             <select id="tradeRequestSelect" class="modal-input"></select>
             
-            <button class="start-button" onclick="sendTradeRequest()" style="margin-top:20px;">Отправить предложение</button>
+            <button class="start-button" onclick="sendTradeRequest()">Отправить</button>
         </div>
     </div>  
 
     <div id="incomingTradesModal" class="modal-backdrop hidden">
-        <div class="modal-content card">
-            <button class="modal-close" onclick="closeIncomingTrades()">✖</button>
-            <h3>Предложения</h3>
+        <div class="modal-content">
+            <div class="modal-header-strip"></div>
+            <div class="modal-top-row">
+                <h3 class="modal-title">📨 ВХОДЯЩИЕ</h3>
+                <button class="modal-close" onclick="closeIncomingTrades()">×</button>
+            </div>
             <div id="incomingTradesList"></div>
         </div>
     </div>
 
-    <script type="module" src="script.js"></script>
+    <script type="module" src="game.js"></script>
 </body>
 </html>
