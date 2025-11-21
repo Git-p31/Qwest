@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
     <title>Выбор Команды</title>
     <link rel="stylesheet" href="index.css" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
@@ -13,7 +13,7 @@
     <div class="selection-wrap">
         <header>
             <div class="image-wrap card-style-photo">
-            <img src="image.png" alt="Stuttgart Winter" class="event-photo">
+                <img src="image.png" alt="Stuttgart Winter" class="event-photo">
             </div>
             <h1 class="game-title">Stuttgart Talks</h1>
             <div id="status-selection" class="status-selection">Подключение...</div>
@@ -46,7 +46,7 @@
 
     <div id="teamModal" class="modal-backdrop hidden">
         <div class="modal-content card">
-            <button class="modal-close" onclick="closeModal()">✖</button>
+            <button class="modal-close" onclick="document.getElementById('teamModal').classList.add('hidden')">✖</button>
             <h2 id="modalTitle">Настройка Команды</h2>
 
             <div style="margin: 20px 0;">
@@ -68,6 +68,7 @@
             </button>
         </div>
     </div>
+    
     <script type="module" src="login.js"></script>
 </body>
 </html>

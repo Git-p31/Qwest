@@ -1,4 +1,3 @@
-// login.js — Логика экрана входа
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 // ===== CONFIG =====
@@ -26,16 +25,16 @@ function initSelectionScreen() {
     const btnStart = document.getElementById('btnStartAdventure');
     const nameInput = document.getElementById('nameInput');
     
-    if (!btnStart) return; // Защита, если скрипт подключен не туда
+    if (!btnStart) return;
 
     renderTeamCards();
     createSnowEffect();
     
-    // Проверка, есть ли уже сохраненное имя
+    // Проверка сохраненного имени
     const storedName = localStorage.getItem('playerName');
     if (storedName) { nameInput.value = storedName; updateStartButton(); }
 
-    // Слушатели событий
+    // Слушатели
     document.getElementById('teamSelection').addEventListener('click', (e) => {
         const btn = e.target.closest('.team-card-btn');
         if (btn) {
@@ -59,7 +58,6 @@ function initSelectionScreen() {
     nameInput.addEventListener('input', updateStartButton);
     btnStart.addEventListener('click', handleStartAdventure);
     
-    // Модалка настройки команды (для лидера)
     document.getElementById('modalBtnFinish')?.addEventListener('click', finalizeTeamSetup);
     document.getElementById('modalSelfieUpload')?.addEventListener('change', uploadSelfie);
 }
@@ -92,7 +90,7 @@ async function handleStartAdventure() {
     if (!name || !selectedTeamId || !selectedRole) return setStatus('Заполните все поля!', false);
     setStatus('Подключение...');
 
-    // 1. Проверяем, не занят ли Лидер
+    // 1. Проверяем Лидера
     const { count: leaderCount } = await supabase.from('players')
         .select('id', { count: 'exact', head: true })
         .eq('team_id', selectedTeamId)
@@ -100,19 +98,16 @@ async function handleStartAdventure() {
         .neq('name', name);
 
     let finalRole = selectedRole;
-    // Если лидеров 0 — этот игрок становится лидером принудительно
     if (leaderCount === 0) finalRole = 'leader';
-    // Если выбрал лидера, но он занят — разжалуем в исследователи
     else if (selectedRole === 'leader' && leaderCount > 0) { 
         alert('Лидер в этой команде уже есть! Вы будете Исследователем.'); 
         finalRole = 'Explorer'; 
     }
 
-    // 2. Регистрируем или обновляем игрока
+    // 2. Регистрируем/Обновляем
     let { data: player } = await supabase.from('players').select('*').ilike('name', name).single();
     
     if (!player) {
-        // Новый игрок
         const { data: newPlayer, error } = await supabase.from('players')
             .insert({ name, team_id: selectedTeamId, role: finalRole })
             .select().single();
@@ -120,20 +115,17 @@ async function handleStartAdventure() {
         if (error) return setStatus('Ошибка регистрации', false);
         player = newPlayer;
     } else {
-        // Старый игрок — обновляем команду и роль
-        if (player.role === 'leader' && player.team_id === selectedTeamId) finalRole = 'leader'; // Сохраняем лидерство если было
+        if (player.role === 'leader' && player.team_id === selectedTeamId) finalRole = 'leader';
         await supabase.from('players').update({ team_id: selectedTeamId, role: finalRole }).eq('id', player.id);
         player.team_id = selectedTeamId;
         player.role = finalRole;
     }
 
-    // 3. Сохраняем и переходим
     localStorage.setItem('playerName', player.name);
     me = player;
     
     const { data: team } = await supabase.from('teams').select('*').eq('id', selectedTeamId).single();
     
-    // Если я лидер и команда еще не настроена (нет названия) — открываем настройку
     if (me.role === 'leader' && !team.name_by_leader) {
         openModalSetup();
     } else {
@@ -178,7 +170,8 @@ function createSnowEffect() {
     if(!cvs) return;
     const ctx = cvs.getContext('2d');
     let W = window.innerWidth, H = window.innerHeight;
-    cvs.width = W; cvs.height = H;
+    const resize = () => { W=window.innerWidth; H=window.innerHeight; cvs.width=W; cvs.height=H; };
+    window.addEventListener('resize', resize); resize();
     const f = Array.from({length: 50}, ()=>({x:Math.random()*W,y:Math.random()*H,s:Math.random()+0.5}));
     setInterval(()=>{
         ctx.clearRect(0,0,W,H); ctx.fillStyle="rgba(255,255,255,0.6)"; ctx.beginPath();
