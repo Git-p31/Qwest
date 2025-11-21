@@ -10,6 +10,10 @@
 <body class="game-body">
     <canvas id="snowCanvas"></canvas>
     
+    <div id="iceOverlay" class="ice-overlay hidden"></div>
+
+    <div id="fireOverlay" class="fire-overlay hidden"></div>
+
     <div id="lastChanceTimer" class="hidden">
         <span>⚠️ ПОСЛЕДНИЙ ШАНС: </span>
         <span id="timerCountdown">05:00</span>
@@ -137,6 +141,23 @@
             <p style="font-style: italic; color: var(--accent-green); margin-top: 20px; font-size: 1rem;">📍 Проследуйте на финальную локацию!</p>
             
             <button id="btnCloseModal" class="start-button hidden" onclick="document.getElementById('endGameModal').classList.add('hidden')">Понятно</button>
+        </div>
+    </div>
+
+    <div id="targetModal" class="modal-backdrop hidden">
+        <div class="modal-content">
+            <div class="modal-top-row">
+                <h3 class="modal-title">❄️ ЗАМОРОЗИТЬ КОГО?</h3>
+                <button class="modal-close" onclick="closeTargetModal()">×</button>
+            </div>
+            
+            <p class="muted" style="margin-bottom: 15px;">Выберите команду, чтобы остановить их прогресс:</p>
+            
+            <select id="targetSelect" class="modal-input" style="margin-bottom: 20px;"></select>
+            
+            <button id="btnConfirmFreeze" class="start-button" style="background: var(--accent-ice); color: #000;">
+                ОТПРАВИТЬ ХОЛОД
+            </button>
         </div>
     </div>
 

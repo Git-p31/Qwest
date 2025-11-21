@@ -78,6 +78,7 @@ function setupSubscriptions() {
             currentTeam = {...currentTeam, ...payload.new}; 
             renderGameInterface(); 
             checkGlobalGameState();
+            checkFreezeState(); // Проверка заморозки при обновлении
         })
         .subscribe();
 
@@ -229,15 +230,27 @@ function renderGameInterface() {
             const item = GLOBAL_ITEMS[id] || {name:'???', emoji:'📦', type:'item'};
             let style = item.type === 'story' ? 'border-left: 3px solid var(--accent-gold)' : '';
             
+            // === НОВОЕ: Кнопка Использовать (Гаджеты) ===
+            let actionBtn = '';
+            if (item.type === 'gadget' && me.role === 'leader') {
+                const btnColor = item.id == 11 ? '#8be9fd' : '#ff5555'; // Голубой для льда, Красный для огня
+                actionBtn = `<button class="btn-use" style="background:${btnColor}" onclick="handleItemUse(${id})">USE</button>`;
+            }
+            // =============================================
+
             list.innerHTML += `
             <li style="${style}">
-                <div style="display:flex;align-items:center;gap:10px;">
+                <div style="display:flex;align-items:center;gap:10px; flex-grow: 1;">
                     <span style="font-size:1.5rem">${item.emoji}</span> 
                     <div style="display:flex; flex-direction:column; line-height:1.2;">
                         <span style="font-weight:bold; font-size:0.9rem;">${item.name}</span>
+                        <span class="muted" style="font-size:0.7rem">${item.description || ''}</span>
                     </div>
                 </div>
-                <span class="inv-count">x${inv[id]}</span>
+                <div style="display:flex; align-items:center; gap: 10px;">
+                    ${actionBtn}
+                    <span class="inv-count">x${inv[id]}</span>
+                </div>
             </li>`;
         }
     });
@@ -275,6 +288,7 @@ function renderGameInterface() {
     progressEl.textContent = Math.round((completedCount/tasks.length)*100) + '%';
 
     renderMembers();
+    checkFreezeState(); // Проверка при отрисовке
 }
 
 // ===== ACTIONS =====
@@ -452,6 +466,168 @@ function createSnowEffect() {
         ctx.clearRect(0,0,W,H); ctx.fillStyle="rgba(255,255,255,0.7)"; ctx.beginPath();
         f.forEach(p=>{ctx.moveTo(p.x,p.y);ctx.arc(p.x,p.y,p.s,0,Math.PI*2);p.y+=p.s/2;if(p.y>H)p.y=-5;});ctx.fill();
     },40);
+}
+
+// ===== ЛОГИКА ГАДЖЕТОВ (VFX EDITION + VALIDATION) =====
+
+let wasFrozen = false; // Флаг для отслеживания переходов
+
+// 1. Проверка состояния с АНИМАЦИЯМИ
+function checkFreezeState() {
+    if (!currentTeam) return;
+    
+    const iceOverlay = document.getElementById('iceOverlay');
+    const fireOverlay = document.getElementById('fireOverlay');
+    const body = document.body;
+    
+    // Проверяем, заморожены ли мы СЕЙЧАС
+    const isFrozen = currentTeam.frozen_until && new Date(currentTeam.frozen_until) > new Date();
+
+    // СЦЕНАРИЙ 1: НАС ТОЛЬКО ЧТО ЗАМОРОЗИЛИ (УДАР!)
+    if (isFrozen && !wasFrozen) {
+        // Включаем режим
+        body.classList.add('frozen-mode');
+        iceOverlay.classList.remove('hidden');
+        
+        // Запускаем анимации удара и тряски
+        iceOverlay.classList.add('smash');
+        body.classList.add('body-shake');
+        
+        // Убираем классы анимации через 0.5 сек
+        setTimeout(() => {
+            iceOverlay.classList.remove('smash');
+            body.classList.remove('body-shake');
+        }, 500);
+        
+        wasFrozen = true;
+    }
+
+    // СЦЕНАРИЙ 2: МЫ ВСЕ ЕЩЕ ЗАМОРОЖЕНЫ (Таймер)
+    if (isFrozen) {
+        // Подстраховка
+        if (!body.classList.contains('frozen-mode')) {
+             body.classList.add('frozen-mode');
+             iceOverlay.classList.remove('hidden');
+             wasFrozen = true;
+        }
+
+        // Таймер
+        const left = new Date(currentTeam.frozen_until) - new Date();
+        const secs = Math.ceil(left / 1000);
+        document.getElementById('myTeamName').innerHTML = `<span style="color:var(--accent-ice); text-shadow: 0 0 15px var(--accent-ice);">❄️ ${secs}с</span>`;
+        
+        // Рекурсивный вызов
+        setTimeout(checkFreezeState, 1000);
+    } 
+    
+    // СЦЕНАРИЙ 3: РАЗМОРОЗКА (ОГНЕННЫЙ ВЗРЫВ!)
+    else {
+        if (wasFrozen) {
+            // 1. Показываем огонь
+            fireOverlay.classList.remove('hidden');
+            fireOverlay.classList.add('boom');
+            
+            // 2. Убираем лед МГНОВЕННО
+            body.classList.remove('frozen-mode');
+            iceOverlay.classList.add('hidden');
+            
+            // 3. Возвращаем имя команды
+            const staticInfo = TEAMS_STATIC_DATA.find(t => t.id === currentTeam.id);
+            const baseName = currentTeam.name_by_leader || currentTeam.name;
+            document.getElementById('myTeamName').innerHTML = `${baseName} ${staticInfo.symbol}`;
+            
+            // 4. Скрываем огонь
+            setTimeout(() => {
+                fireOverlay.classList.remove('boom');
+                fireOverlay.classList.add('hidden');
+            }, 1200);
+            
+            wasFrozen = false;
+        }
+        
+        // Обычное состояние
+        if (body.classList.contains('frozen-mode')) {
+            body.classList.remove('frozen-mode');
+            iceOverlay.classList.add('hidden');
+            const staticInfo = TEAMS_STATIC_DATA.find(t => t.id === currentTeam.id);
+            document.getElementById('myTeamName').innerHTML = `${currentTeam.name_by_leader||currentTeam.name} ${staticInfo.symbol}`;
+        }
+    }
+}
+
+// 2. Обработчик кнопки USE в рюкзаке
+window.handleItemUse = async (itemId) => {
+    if (itemId == 11) {
+        openTargetModal(itemId);
+    } 
+    else if (itemId == 12) {
+        if (!currentTeam.frozen_until || new Date(currentTeam.frozen_until) < new Date()) {
+            if(!confirm('Вы сейчас НЕ заморожены. Все равно использовать руну? (Она сгорит)')) return;
+        }
+        await executeGadget(itemId, null); 
+    }
+};
+
+// 3. Модалка выбора цели
+async function openTargetModal(itemId) {
+    document.getElementById('targetModal').classList.remove('hidden');
+    const select = document.getElementById('targetSelect');
+    select.innerHTML = '<option>Поиск команд...</option>';
+    
+    const { data: teams } = await supabase.from('teams').select('id, name, name_by_leader')
+        .neq('id', me.team_id); 
+        
+    select.innerHTML = '';
+    teams.forEach(t => {
+        select.innerHTML += `<option value="${t.id}">${t.name_by_leader || t.name}</option>`;
+    });
+    
+    document.getElementById('btnConfirmFreeze').onclick = () => {
+        executeGadget(itemId, select.value);
+        closeTargetModal();
+    };
+}
+window.closeTargetModal = () => document.getElementById('targetModal').classList.add('hidden');
+
+// 4. Отправка команды (VALIDATION FIX)
+async function executeGadget(itemId, targetId) {
+    const cleanItemId = parseInt(itemId);
+    const cleanMyId = parseInt(me.team_id);
+    let cleanTargetId = targetId ? parseInt(targetId) : cleanMyId;
+
+    if (isNaN(cleanItemId) || isNaN(cleanMyId) || isNaN(cleanTargetId)) {
+        alert("Ошибка: Некорректные данные (ID). Обновите страницу.");
+        return;
+    }
+    
+    if (cleanItemId === 11 && (!cleanTargetId || cleanTargetId === cleanMyId)) {
+        alert("⚠️ Выберите команду из списка!");
+        return;
+    }
+    
+    console.log('Using gadget:', { item: cleanItemId, target: cleanTargetId });
+
+    const { data, error } = await supabase.rpc('use_gadget', {
+        attacker_team_id: cleanMyId,
+        target_team_id: cleanTargetId,
+        item_id: cleanItemId
+    });
+
+    if (error) {
+        console.error('Supabase Error:', error);
+        alert('Ошибка: ' + error.message);
+    } else {
+        if (data.success) {
+            // Сообщение покажем, но данные обновим сразу для анимации
+            const { data: updated } = await supabase.from('teams').select('*').eq('id', me.team_id).single();
+            currentTeam = updated;
+            // Принудительно запускаем проверку для мгновенного эффекта
+            checkFreezeState(); 
+            renderGameInterface();
+        } else {
+            alert('Не сработало: ' + data.message);
+        }
+    }
 }
 
 initGame();
