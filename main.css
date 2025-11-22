@@ -35,8 +35,21 @@ html, body {
   overflow-x: hidden;
 }
 
-/* Снег */
-canvas#snowCanvas { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 1; opacity: 0.8; }
+/* === КАНВАСЫ (Фон и Эффекты) === */
+
+/* Снег (фоновый, постоянный) */
+canvas#snowCanvas { 
+    position: fixed; left: 0; top: 0; 
+    pointer-events: none; z-index: 1; opacity: 0.8; 
+}
+
+/* Падающие ледяные осколки (только при заморозке) */
+canvas#iceFallCanvas {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; 
+    z-index: 9100; /* Чуть выше статического льда */
+}
+
 .hidden { display: none !important; }
 .muted { opacity: 0.7; font-size: 0.9em; font-style: italic; color: var(--text-muted); }
 
@@ -113,7 +126,6 @@ h2 {
 .inventory-list li { 
     display: flex; align-items: center; justify-content: space-between;
     padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.1);
-    /* Адаптация под длинные названия */
     gap: 10px;
 }
 .inventory-list li:last-child { border-bottom: none; }
@@ -124,9 +136,9 @@ h2 {
     box-shadow: 0 2px 5px rgba(0,0,0,0.3); white-space: nowrap;
 }
 
-/* === КАРТА (Добавлено) === */
+/* === КАРТА === */
 .map-placeholder {
-    width: 100%; min-height: 250px; /* Фиксированная высота */
+    width: 100%; min-height: 250px;
     background: rgba(0,0,0,0.3); border-radius: 16px;
     display: flex; align-items: center; justify-content: center;
     border: 2px dashed rgba(255,255,255,0.1);
@@ -235,25 +247,22 @@ button.secondary {
 
 @keyframes goldPulse { 0% { box-shadow: 0 0 10px var(--accent-gold); } 100% { box-shadow: 0 0 30px var(--accent-gold); } }
 
-/* === МОБИЛЬНАЯ АДАПТАЦИЯ (Дополнительно) === */
+/* === МОБИЛЬНАЯ АДАПТАЦИЯ === */
 @media (max-width: 800px) {
-    /* Инвентарь плиткой */
     .inventory-list { display: flex; flex-wrap: wrap; gap: 8px; }
     .inventory-list li {
         border: 1px solid rgba(255,255,255,0.1);
         background: rgba(0,0,0,0.2);
         border-radius: 12px;
         padding: 10px;
-        flex: 1 1 45%; /* По 2 элемента в ряд */
+        flex: 1 1 45%; 
         margin-bottom: 0;
-        flex-direction: column; /* Элементы друг под другом внутри плитки */
+        flex-direction: column;
         align-items: flex-start;
     }
     .inventory-list li > div { width: 100%; margin-bottom: 5px; }
     .inventory-list li.muted { flex: 1 1 100%; text-align: center; border:none; background:none; }
-    
     .inv-count { align-self: flex-end; }
-    
     .game-title { font-size: 1.5rem; }
     .btn-create-big { font-size: 1rem; padding: 14px; }
 }
@@ -262,17 +271,18 @@ button.secondary {
     .game-main { display: grid; grid-template-columns: 320px 1fr; grid-template-rows: auto 1fr; gap: 20px; }
     .inventory-panel { grid-column: 1; grid-row: 1 / 3; }
     .bottom-panel { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; }
-    
     .card:hover { transform: translateY(-2px); transition: transform 0.3s ease; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
 }
 
-/* === ЛЮТЫЕ ЭФФЕКТЫ (VFX EDITION) === */
+/* ========================================= */
+/* === VFX ZONE: ЭФФЕКТЫ (ЛЕД, ОГОНЬ, ГРЯЗЬ) === */
+/* ========================================= */
 
 /* 1. ВЗРЫВ ОГНЯ (При разморозке) */
 .fire-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     pointer-events: none; z-index: 10000;
-    mix-blend-mode: screen; /* Режим наложения для "свечения" */
+    mix-blend-mode: screen;
     opacity: 0;
 }
 
@@ -293,13 +303,11 @@ button.secondary {
     background: radial-gradient(circle, transparent 40%, rgba(139, 233, 253, 0.4) 90%),
                 url('https://www.transparenttextures.com/patterns/cracked-glass.png'); /* Текстура трещин */
     box-shadow: inset 0 0 100px rgba(139, 233, 253, 0.8);
-    pointer-events: none; /* Пропускает клики! */
+    pointer-events: none;
     z-index: 9000;
-    /* Базовая пульсация, когда уже заморожен */
     animation: pulseIce 5s infinite alternate;
 }
 
-/* Анимация "УДАРА" при наложении заморозки */
 .ice-overlay.smash {
     animation: iceSmash 0.5s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
 }
@@ -307,39 +315,86 @@ button.secondary {
 @keyframes pulseIce { 0% { opacity: 0.6; } 100% { opacity: 0.9; } }
 
 @keyframes iceSmash {
-    0% { opacity: 0; transform: scale(2); filter: brightness(5); } /* Яркая вспышка */
-    20% { opacity: 1; transform: scale(0.9); filter: brightness(1); } /* Удар внутрь */
-    40% { transform: scale(1.05); } /* Отскок */
+    0% { opacity: 0; transform: scale(2); filter: brightness(5); } 
+    20% { opacity: 1; transform: scale(0.9); filter: brightness(1); } 
+    40% { transform: scale(1.05); }
     100% { transform: scale(1); }
 }
 
-/* 3. ТРЯСКА ЭКРАНА (Body Shake) */
-.body-shake {
-    animation: shakeHard 0.5s ease-in-out;
-}
+/* 3. ТРЯСКА ЭКРАНА */
+.body-shake { animation: shakeHard 0.5s ease-in-out; }
 
 @keyframes shakeHard {
     0% { transform: translate(0, 0) rotate(0deg); }
     10% { transform: translate(-10px, -10px) rotate(-1deg); filter: blur(2px); }
-    20% { transform: translate(10px, 10px) rotate(1deg); filter: hue-rotate(180deg); } /* Инверсия цвета на мгновение */
+    20% { transform: translate(10px, 10px) rotate(1deg); filter: hue-rotate(180deg); }
     30% { transform: translate(-10px, 10px) rotate(0deg); filter: blur(0); }
     40% { transform: translate(10px, -10px) rotate(1deg); }
     50% { transform: translate(0, 0) rotate(0deg); }
 }
 
-/* 4. Кнопка "USE" в инвентаре */
+/* 4. ЭФФЕКТ ГРЯЗИ / КАКАО (FINAL PHYSICS FIX) */
+
+.cocoa-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; 
+    z-index: 99999; /* Поверх всего */
+    overflow: hidden;
+}
+
+/* Контейнер для падения (только гравитация) */
+.cocoa-wrapper {
+    position: absolute;
+    animation: gravityFall 4s ease-in 0.4s forwards;
+}
+
+/* Сама клякса (форма и шлепок) */
+.cocoa-shape {
+    width: 100%; height: 100%;
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.2) 0%, transparent 25%),
+                radial-gradient(circle at 50% 50%, #5D4037 0%, #3E2723 60%, #1a0e0c 100%);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    transform: scale(0);
+    opacity: 0.95;
+    animation: splatAppear 0.3s cubic-bezier(0.15, 1.8, 0.5, 1) forwards;
+}
+
+/* Хвост (стекающая капля) */
+.cocoa-shape::after {
+    content: ''; position: absolute; z-index: -1;
+    top: 50%; left: 50%; width: 40%; height: 0;
+    background: inherit;
+    border-radius: 0 0 20px 20px;
+    transform: translateX(-50%);
+    animation: growTail 3.5s ease-in 0.4s forwards;
+}
+
+@keyframes splatAppear {
+    0% { transform: scale(0); }
+    100% { transform: scale(1); }
+}
+
+@keyframes gravityFall {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(80vh); opacity: 0; }
+}
+
+@keyframes growTail {
+    0% { height: 0; opacity: 1; }
+    100% { height: 200px; width: 10%; opacity: 0.5; }
+}
+
+/* === КНОПКА USE === */
 .btn-use {
     background: var(--accent-gold); color: #000; border: none;
     padding: 6px 14px; border-radius: 20px; font-weight: 900;
     font-size: 0.75rem; cursor: pointer; text-transform: uppercase;
     box-shadow: 0 2px 10px rgba(255, 215, 0, 0.3);
-    margin-left: auto; /* Прижимаем вправо */
+    margin-left: auto; 
 }
 .btn-use:active { transform: scale(0.95); }
 
-/* 5. РЕЖИМ ЗАМОРОЗКИ (FROZEN MODE) */
-
-
+/* === РЕЖИМ ЗАМОРОЗКИ (FROZEN MODE) === */
 /* Блокируем всё, КРОМЕ инвентаря */
 body.frozen-mode .map-window,
 body.frozen-mode .tasks-panel,
@@ -347,18 +402,18 @@ body.frozen-mode .team-info-panel,
 body.frozen-mode .header-right {
     filter: grayscale(1) blur(4px);
     opacity: 0.5;
-    pointer-events: none; /* Клики не проходят */
+    pointer-events: none; 
     transition: filter 0.5s, opacity 0.5s;
 }
 
-/* Инвентарь должен быть доступен и выделен! */
+/* Инвентарь должен быть доступен (спасение) */
 body.frozen-mode .inventory-panel {
     position: relative;
-    z-index: 9500; /* Выше льда */
-    box-shadow: 0 0 50px var(--accent-gold); /* Сильная подсветка "Спасение здесь" */
+    z-index: 9500; 
+    box-shadow: 0 0 50px var(--accent-gold); 
     border-color: var(--accent-gold);
     animation: shakeInv 0.5s ease-in-out;
-    background: rgba(20, 30, 45, 1); /* Непрозрачный фон */
+    background: rgba(20, 30, 45, 1);
 }
 
 @keyframes shakeInv { 
@@ -367,84 +422,18 @@ body.frozen-mode .inventory-panel {
     75% { transform: translateX(5px); } 
 }
 
-/* === РЕДКОСТЬ ПРЕДМЕТОВ === */
-.rarity-common { border-color: #A0B0C0 !important; box-shadow: none; }
-.rarity-rare { border-color: #3b82f6 !important; box-shadow: 0 0 10px rgba(59, 130, 246, 0.3); }
-.rarity-epic { border-color: #a855f7 !important; box-shadow: 0 0 15px rgba(168, 85, 247, 0.4); }
-.rarity-legendary { border-color: #eab308 !important; box-shadow: 0 0 20px rgba(234, 179, 8, 0.5); }
-
-/* Хроматический (Переливающийся) */
-.rarity-chromatic {
-    border: 2px solid transparent !important;
-    background-image: linear-gradient(var(--card-bg), var(--card-bg)), 
-                      linear-gradient(125deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
-    background-origin: border-box;
-    background-clip: content-box, border-box;
-    box-shadow: 0 0 25px rgba(255, 255, 255, 0.5);
-    animation: chromaRotate 4s linear infinite;
-}
-@keyframes chromaRotate { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
-
-/* === КРАФТ === */
-.craft-recipe {
-    background: rgba(0,0,0,0.3);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 12px;
-    padding: 15px;
-    margin-bottom: 15px;
-}
-.recipe-row {
-    display: flex; align-items: center; justify-content: center; gap: 10px;
-    margin-bottom: 15px; flex-wrap: wrap;
-}
-.ingredient {
-    display: flex; flex-direction: column; align-items: center;
-    font-size: 0.8rem; opacity: 0.7;
-}
-.ingredient.has-it { opacity: 1; color: var(--accent-green); font-weight: bold; }
-.ingredient.missing { opacity: 0.4; color: var(--accent-red); }
-
-.plus-sign { color: var(--text-muted); font-weight: bold; }
-.arrow-sign { color: var(--accent-gold); font-size: 1.2rem; }
-
-.craft-result { transform: scale(1.1); border: 2px solid var(--accent-gold); padding: 5px; border-radius: 8px; background: rgba(255,215,0,0.1); }
-
-/* === РЕДКОСТЬ ПРЕДМЕТОВ (RARITY) === */
+/* === РЕДКОСТЬ ПРЕДМЕТОВ И КРАФТ === */
 .rarity-common { border-left: 4px solid #A0B0C0 !important; }
 .rarity-rare { border-left: 4px solid #3b82f6 !important; box-shadow: inset 5px 0 10px rgba(59, 130, 246, 0.1); }
 .rarity-epic { border-left: 4px solid #a855f7 !important; box-shadow: inset 5px 0 10px rgba(168, 85, 247, 0.15); }
 .rarity-legendary { border-left: 4px solid #eab308 !important; box-shadow: inset 5px 0 15px rgba(234, 179, 8, 0.2); }
 
-/* Хроматический (Мифический) эффект */
-.rarity-chromatic {
-    border-left: 4px solid transparent !important;
-    border-image: linear-gradient(to bottom, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff) 1;
-    animation: chromaPulse 3s infinite alternate;
-    background: linear-gradient(90deg, rgba(255,255,255,0.05), transparent);
-}
-@keyframes chromaPulse { 0% { box-shadow: inset 0 0 5px #ff0000; } 100% { box-shadow: inset 0 0 15px #00ffff; } }
-
-/* === МЕНЮ КРАФТА === */
 .craft-recipe {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(0,0,0,0.3);
     border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 12px;
-    padding: 15px;
-    margin-bottom: 15px;
+    border-radius: 12px; padding: 15px; margin-bottom: 15px;
 }
-.recipe-row {
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    margin-bottom: 15px; flex-wrap: wrap;
-}
-.ingredient {
-    display: flex; flex-direction: column; align-items: center;
-    font-size: 0.75rem; transition: opacity 0.3s;
-}
-.ingredient.has-it { opacity: 1; color: var(--accent-green); text-shadow: 0 0 5px var(--accent-green); }
-.ingredient.missing { opacity: 0.4; color: var(--accent-red); filter: grayscale(1); }
-
-.plus-sign { color: var(--text-muted); font-weight: bold; font-size: 1rem; }
-.arrow-sign { color: var(--accent-gold); font-size: 1.2rem; margin: 0 5px; }
+.recipe-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
 
 .craft-result { 
     transform: scale(1.1); 
