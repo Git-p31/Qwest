@@ -338,6 +338,8 @@ button.secondary {
 .btn-use:active { transform: scale(0.95); }
 
 /* 5. РЕЖИМ ЗАМОРОЗКИ (FROZEN MODE) */
+
+
 /* Блокируем всё, КРОМЕ инвентаря */
 body.frozen-mode .map-window,
 body.frozen-mode .tasks-panel,
@@ -363,4 +365,91 @@ body.frozen-mode .inventory-panel {
     0%, 100% { transform: translateX(0); } 
     25% { transform: translateX(-5px); } 
     75% { transform: translateX(5px); } 
+}
+
+/* === РЕДКОСТЬ ПРЕДМЕТОВ === */
+.rarity-common { border-color: #A0B0C0 !important; box-shadow: none; }
+.rarity-rare { border-color: #3b82f6 !important; box-shadow: 0 0 10px rgba(59, 130, 246, 0.3); }
+.rarity-epic { border-color: #a855f7 !important; box-shadow: 0 0 15px rgba(168, 85, 247, 0.4); }
+.rarity-legendary { border-color: #eab308 !important; box-shadow: 0 0 20px rgba(234, 179, 8, 0.5); }
+
+/* Хроматический (Переливающийся) */
+.rarity-chromatic {
+    border: 2px solid transparent !important;
+    background-image: linear-gradient(var(--card-bg), var(--card-bg)), 
+                      linear-gradient(125deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+    background-origin: border-box;
+    background-clip: content-box, border-box;
+    box-shadow: 0 0 25px rgba(255, 255, 255, 0.5);
+    animation: chromaRotate 4s linear infinite;
+}
+@keyframes chromaRotate { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
+
+/* === КРАФТ === */
+.craft-recipe {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+.recipe-row {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    margin-bottom: 15px; flex-wrap: wrap;
+}
+.ingredient {
+    display: flex; flex-direction: column; align-items: center;
+    font-size: 0.8rem; opacity: 0.7;
+}
+.ingredient.has-it { opacity: 1; color: var(--accent-green); font-weight: bold; }
+.ingredient.missing { opacity: 0.4; color: var(--accent-red); }
+
+.plus-sign { color: var(--text-muted); font-weight: bold; }
+.arrow-sign { color: var(--accent-gold); font-size: 1.2rem; }
+
+.craft-result { transform: scale(1.1); border: 2px solid var(--accent-gold); padding: 5px; border-radius: 8px; background: rgba(255,215,0,0.1); }
+
+/* === РЕДКОСТЬ ПРЕДМЕТОВ (RARITY) === */
+.rarity-common { border-left: 4px solid #A0B0C0 !important; }
+.rarity-rare { border-left: 4px solid #3b82f6 !important; box-shadow: inset 5px 0 10px rgba(59, 130, 246, 0.1); }
+.rarity-epic { border-left: 4px solid #a855f7 !important; box-shadow: inset 5px 0 10px rgba(168, 85, 247, 0.15); }
+.rarity-legendary { border-left: 4px solid #eab308 !important; box-shadow: inset 5px 0 15px rgba(234, 179, 8, 0.2); }
+
+/* Хроматический (Мифический) эффект */
+.rarity-chromatic {
+    border-left: 4px solid transparent !important;
+    border-image: linear-gradient(to bottom, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff) 1;
+    animation: chromaPulse 3s infinite alternate;
+    background: linear-gradient(90deg, rgba(255,255,255,0.05), transparent);
+}
+@keyframes chromaPulse { 0% { box-shadow: inset 0 0 5px #ff0000; } 100% { box-shadow: inset 0 0 15px #00ffff; } }
+
+/* === МЕНЮ КРАФТА === */
+.craft-recipe {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+.recipe-row {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-bottom: 15px; flex-wrap: wrap;
+}
+.ingredient {
+    display: flex; flex-direction: column; align-items: center;
+    font-size: 0.75rem; transition: opacity 0.3s;
+}
+.ingredient.has-it { opacity: 1; color: var(--accent-green); text-shadow: 0 0 5px var(--accent-green); }
+.ingredient.missing { opacity: 0.4; color: var(--accent-red); filter: grayscale(1); }
+
+.plus-sign { color: var(--text-muted); font-weight: bold; font-size: 1rem; }
+.arrow-sign { color: var(--accent-gold); font-size: 1.2rem; margin: 0 5px; }
+
+.craft-result { 
+    transform: scale(1.1); 
+    border: 2px solid var(--accent-gold); 
+    padding: 8px; border-radius: 12px; 
+    background: rgba(255,215,0,0.1); 
+    box-shadow: 0 0 15px rgba(255,215,0,0.2);
 }

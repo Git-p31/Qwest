@@ -1,4 +1,4 @@
-// game.js — Только игровая логика
+// game.js — Полная игровая логика + Крафт
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 // ===== CONFIG =====
@@ -15,6 +15,42 @@ const TEAMS_STATIC_DATA = [
     { id: 104, defaultName: 'Деды Морозы', color: '#bd93f9', symbol: '🎅' },
 ];
 const ROLES_DATA = { Explorer: 'Исследователь', Guardian: 'Хранитель', Saboteur: 'Диверсант', Negotiator: 'Переговорщик', leader: 'Лидер' };
+
+// ===== КОНФИГУРАЦИЯ КРАФТА =====
+// ВАЖНО: Замените ID ниже на реальные ID из вашей таблицы 'items' в Supabase!
+const CRAFT_RECIPES = [
+    {
+        id: 1, // ID рецепта (уникальный)
+        name: "Ледяная Бомба",
+        resultId: 11, // ID предмета, который получится (например, Заморозка)
+        description: "Замораживает врагов на 5 минут",
+        ingredients: [
+            { id: 1, count: 3 }, // Нужно 3 предмета с ID 1 (Снежок?)
+            { id: 2, count: 1 }  // Нужно 1 предмет с ID 2 (Вода?)
+        ]
+    },
+    {
+        id: 2,
+        name: "Огненная Руна",
+        resultId: 12, // ID предмета (Разморозка/Щит)
+        description: "Снимает лед и защищает",
+        ingredients: [
+            { id: 3, count: 2 }, // Нужно 2 предмета с ID 3 (Уголь?)
+            { id: 4, count: 1 }  // Нужно 1 предмет с ID 4 (Спички?)
+        ]
+    },
+    {
+        id: 3,
+        name: "Легендарный Подарок",
+        resultId: 99, // Какой-то редкий предмет для победы
+        description: "Дает много очков",
+        ingredients: [
+            { id: 5, count: 1 }, 
+            { id: 6, count: 1 }, 
+            { id: 7, count: 1 }  
+        ]
+    }
+];
 
 // Глобальные переменные
 let me = null; 
@@ -77,6 +113,10 @@ function setupSubscriptions() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'teams', filter: `id=eq.${me.team_id}`}, payload => { 
             currentTeam = {...currentTeam, ...payload.new}; 
             renderGameInterface(); 
+            // Если открыто окно крафта, обновляем его тоже (чтобы видеть расход ресурсов)
+            if (!document.getElementById('craftModal').classList.contains('hidden')) {
+                renderCraftRecipes();
+            }
             checkGlobalGameState();
             checkFreezeState(); // Проверка заморозки при обновлении
         })
@@ -117,58 +157,45 @@ function setupSubscriptions() {
 
 // ===== FINAL LOGIC (ТАЙМЕР И ПОБЕДА) =====
 async function checkGlobalGameState() {
-    // Получаем список команд, отсортированный по времени завершения
     const { data: teams } = await supabase.from('teams').select('*').order('updated_at', { ascending: true });
     if (!teams) return;
 
-    // Находим всех, кто выполнил все задачи
     const winners = teams.filter(t => t.tasks && t.tasks.length > 0 && t.tasks.every(task => task.completed));
-    
     const amIWinner = winners.some(w => w.id === me.team_id);
 
-    // 1. ЛОГИКА ПОБЕДИТЕЛЯ
     if (amIWinner && !hasShownVictory) {
         showVictoryModal();
         return;
     }
 
-    // 2. ЛОГИКА ТАЙМЕРА (Для остальных)
     if (!amIWinner && !hasShownGameOver) {
-        // Таймер запускается, если есть 2 и более победителей
         if (winners.length >= 2) {
             const secondWinnerTime = new Date(winners[1].updated_at).getTime();
             const DEADLINE_MS = 5 * 60 * 1000; // 5 минут
-            
             deadlineTimestamp = secondWinnerTime + DEADLINE_MS;
             
             document.getElementById('lastChanceTimer').classList.remove('hidden');
             
-            // Запускаем локальный счетчик UI, если еще не запущен
             if (!timerUiInterval) {
                 timerUiInterval = setInterval(updateTimerUI, 1000);
-                updateTimerUI(); // Сразу обновить цифры
+                updateTimerUI(); 
             }
         } else {
-            // Если победителей < 2, прячем таймер
             document.getElementById('lastChanceTimer').classList.add('hidden');
         }
     }
 }
 
-// Локальное обновление цифр (чтобы не долбить базу)
 function updateTimerUI() {
     if (!deadlineTimestamp) return;
-    
     const now = Date.now();
     const diff = deadlineTimestamp - now;
 
     if (diff <= 0) {
-        // Время вышло
         clearInterval(timerUiInterval);
         document.getElementById('timerCountdown').textContent = "00:00";
         showGameOverModal();
     } else {
-        // Обновляем текст
         const m = Math.floor(diff / 60000);
         const s = Math.floor((diff % 60000) / 1000);
         document.getElementById('timerCountdown').textContent = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
@@ -181,13 +208,10 @@ function showVictoryModal() {
     document.getElementById('endTitle').textContent = "ВЫ ПОБЕДИЛИ! 🏆";
     document.getElementById('endMessage').innerHTML = "Поздравляем! Вы заняли призовое место.<br>Бегите на финальную локацию.";
     document.querySelector('.modal-content').className = "modal-content pulse-gold";
-    
-    // Прячем лишнее
     document.getElementById('winnersListBlock').classList.add('hidden');
     document.getElementById('lastChanceTimer').classList.add('hidden');
     document.getElementById('btnCloseModal').classList.remove('hidden');
     if (timerUiInterval) clearInterval(timerUiInterval);
-    
     hasShownVictory = true;
 }
 
@@ -200,7 +224,6 @@ function showGameOverModal() {
     document.getElementById('endMessage').innerHTML = "К сожалению, вы не успели войти в число победителей.";
     document.querySelector('.modal-content').className = "modal-content pulse-red";
     document.getElementById('btnCloseModal').classList.add('hidden');
-    
     hasShownGameOver = true;
 }
 
@@ -230,13 +253,12 @@ function renderGameInterface() {
             const item = GLOBAL_ITEMS[id] || {name:'???', emoji:'📦', type:'item'};
             let style = item.type === 'story' ? 'border-left: 3px solid var(--accent-gold)' : '';
             
-            // === НОВОЕ: Кнопка Использовать (Гаджеты) ===
+            // Кнопка Использовать (Гаджеты)
             let actionBtn = '';
             if (item.type === 'gadget' && me.role === 'leader') {
-                const btnColor = item.id == 11 ? '#8be9fd' : '#ff5555'; // Голубой для льда, Красный для огня
+                const btnColor = item.id == 11 ? '#8be9fd' : '#ff5555'; 
                 actionBtn = `<button class="btn-use" style="background:${btnColor}" onclick="handleItemUse(${id})">USE</button>`;
             }
-            // =============================================
 
             list.innerHTML += `
             <li style="${style}">
@@ -288,7 +310,7 @@ function renderGameInterface() {
     progressEl.textContent = Math.round((completedCount/tasks.length)*100) + '%';
 
     renderMembers();
-    checkFreezeState(); // Проверка при отрисовке
+    checkFreezeState(); 
 }
 
 // ===== ACTIONS =====
@@ -469,10 +491,8 @@ function createSnowEffect() {
 }
 
 // ===== ЛОГИКА ГАДЖЕТОВ (VFX EDITION + VALIDATION) =====
+let wasFrozen = false; 
 
-let wasFrozen = false; // Флаг для отслеживания переходов
-
-// 1. Проверка состояния с АНИМАЦИЯМИ
 function checkFreezeState() {
     if (!currentTeam) return;
     
@@ -480,20 +500,15 @@ function checkFreezeState() {
     const fireOverlay = document.getElementById('fireOverlay');
     const body = document.body;
     
-    // Проверяем, заморожены ли мы СЕЙЧАС
     const isFrozen = currentTeam.frozen_until && new Date(currentTeam.frozen_until) > new Date();
 
-    // СЦЕНАРИЙ 1: НАС ТОЛЬКО ЧТО ЗАМОРОЗИЛИ (УДАР!)
+    // НАС ТОЛЬКО ЧТО ЗАМОРОЗИЛИ
     if (isFrozen && !wasFrozen) {
-        // Включаем режим
         body.classList.add('frozen-mode');
         iceOverlay.classList.remove('hidden');
-        
-        // Запускаем анимации удара и тряски
         iceOverlay.classList.add('smash');
         body.classList.add('body-shake');
         
-        // Убираем классы анимации через 0.5 сек
         setTimeout(() => {
             iceOverlay.classList.remove('smash');
             body.classList.remove('body-shake');
@@ -502,41 +517,33 @@ function checkFreezeState() {
         wasFrozen = true;
     }
 
-    // СЦЕНАРИЙ 2: МЫ ВСЕ ЕЩЕ ЗАМОРОЖЕНЫ (Таймер)
+    // МЫ ЗАМОРОЖЕНЫ
     if (isFrozen) {
-        // Подстраховка
         if (!body.classList.contains('frozen-mode')) {
              body.classList.add('frozen-mode');
              iceOverlay.classList.remove('hidden');
              wasFrozen = true;
         }
 
-        // Таймер
         const left = new Date(currentTeam.frozen_until) - new Date();
         const secs = Math.ceil(left / 1000);
         document.getElementById('myTeamName').innerHTML = `<span style="color:var(--accent-ice); text-shadow: 0 0 15px var(--accent-ice);">❄️ ${secs}с</span>`;
         
-        // Рекурсивный вызов
         setTimeout(checkFreezeState, 1000);
     } 
-    
-    // СЦЕНАРИЙ 3: РАЗМОРОЗКА (ОГНЕННЫЙ ВЗРЫВ!)
+    // РАЗМОРОЗКА
     else {
         if (wasFrozen) {
-            // 1. Показываем огонь
             fireOverlay.classList.remove('hidden');
             fireOverlay.classList.add('boom');
             
-            // 2. Убираем лед МГНОВЕННО
             body.classList.remove('frozen-mode');
             iceOverlay.classList.add('hidden');
             
-            // 3. Возвращаем имя команды
             const staticInfo = TEAMS_STATIC_DATA.find(t => t.id === currentTeam.id);
             const baseName = currentTeam.name_by_leader || currentTeam.name;
             document.getElementById('myTeamName').innerHTML = `${baseName} ${staticInfo.symbol}`;
             
-            // 4. Скрываем огонь
             setTimeout(() => {
                 fireOverlay.classList.remove('boom');
                 fireOverlay.classList.add('hidden');
@@ -545,7 +552,6 @@ function checkFreezeState() {
             wasFrozen = false;
         }
         
-        // Обычное состояние
         if (body.classList.contains('frozen-mode')) {
             body.classList.remove('frozen-mode');
             iceOverlay.classList.add('hidden');
@@ -555,7 +561,6 @@ function checkFreezeState() {
     }
 }
 
-// 2. Обработчик кнопки USE в рюкзаке
 window.handleItemUse = async (itemId) => {
     if (itemId == 11) {
         openTargetModal(itemId);
@@ -568,7 +573,6 @@ window.handleItemUse = async (itemId) => {
     }
 };
 
-// 3. Модалка выбора цели
 async function openTargetModal(itemId) {
     document.getElementById('targetModal').classList.remove('hidden');
     const select = document.getElementById('targetSelect');
@@ -589,7 +593,6 @@ async function openTargetModal(itemId) {
 }
 window.closeTargetModal = () => document.getElementById('targetModal').classList.add('hidden');
 
-// 4. Отправка команды (VALIDATION FIX)
 async function executeGadget(itemId, targetId) {
     const cleanItemId = parseInt(itemId);
     const cleanMyId = parseInt(me.team_id);
@@ -605,8 +608,6 @@ async function executeGadget(itemId, targetId) {
         return;
     }
     
-    console.log('Using gadget:', { item: cleanItemId, target: cleanTargetId });
-
     const { data, error } = await supabase.rpc('use_gadget', {
         attacker_team_id: cleanMyId,
         target_team_id: cleanTargetId,
@@ -618,10 +619,8 @@ async function executeGadget(itemId, targetId) {
         alert('Ошибка: ' + error.message);
     } else {
         if (data.success) {
-            // Сообщение покажем, но данные обновим сразу для анимации
             const { data: updated } = await supabase.from('teams').select('*').eq('id', me.team_id).single();
             currentTeam = updated;
-            // Принудительно запускаем проверку для мгновенного эффекта
             checkFreezeState(); 
             renderGameInterface();
         } else {
@@ -630,4 +629,126 @@ async function executeGadget(itemId, targetId) {
     }
 }
 
+// ===== ЛОГИКА КРАФТА (WORKBENCH) =====
+
+window.openCraftModal = () => {
+    document.getElementById('craftModal').classList.remove('hidden');
+    renderCraftRecipes();
+};
+
+window.renderCraftRecipes = () => {
+    const container = document.getElementById('craftRecipesList');
+    container.innerHTML = '';
+
+    if (!currentTeam || !currentTeam.inventory) {
+        container.innerHTML = '<div class="muted">Ошибка данных инвентаря</div>';
+        return;
+    }
+
+    CRAFT_RECIPES.forEach(recipe => {
+        const resultItem = GLOBAL_ITEMS[recipe.resultId];
+        if (!resultItem) return; // Если предмет не найден в базе, пропускаем
+
+        // 1. Проверяем ингредиенты
+        let canCraft = true;
+        let ingredientsHtml = '';
+
+        recipe.ingredients.forEach((ing, index) => {
+            const itemData = GLOBAL_ITEMS[ing.id] || { name: '???', emoji: '❓' };
+            const playerHas = currentTeam.inventory[ing.id] || 0;
+            const isEnough = playerHas >= ing.count;
+
+            if (!isEnough) canCraft = false;
+
+            if (index > 0) ingredientsHtml += `<div class="plus-sign">+</div>`;
+
+            ingredientsHtml += `
+                <div class="ingredient ${isEnough ? 'has-it' : 'missing'}">
+                    <div style="font-size:1.5rem">${itemData.emoji}</div>
+                    <div>${playerHas}/${ing.count}</div>
+                </div>
+            `;
+        });
+
+        // 2. Рисуем карточку рецепта
+        const rarityClass = resultItem.rarity ? `rarity-${resultItem.rarity}` : '';
+
+        container.innerHTML += `
+            <div class="craft-recipe ${rarityClass}">
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                    <strong style="color:var(--accent-gold)">${recipe.name}</strong>
+                    <span class="muted" style="font-size:0.8rem">${recipe.description}</span>
+                </div>
+
+                <div class="recipe-row">
+                    ${ingredientsHtml}
+                    <div class="arrow-sign">➔</div>
+                    <div class="craft-result">
+                        <div style="font-size:1.8rem">${resultItem.emoji}</div>
+                    </div>
+                </div>
+
+                <button class="start-button" 
+                        style="margin-top:10px; padding:10px; font-size:0.9rem; ${canCraft ? '' : 'opacity:0.5; cursor:not-allowed; background:#333;'}"
+                        onclick="${canCraft ? `craftItem(${recipe.id})` : ''}">
+                    ${canCraft ? 'СОЗДАТЬ ⚒️' : 'НЕДОСТАТОЧНО РЕСУРСОВ'}
+                </button>
+            </div>
+        `;
+    });
+}
+
+window.craftItem = async (recipeId) => {
+    if (me.role !== 'leader' && me.role !== 'Guardian') { 
+        alert("⚒️ Только Лидер или Хранитель могут использовать верстак!");
+        return;
+    }
+
+    const recipe = CRAFT_RECIPES.find(r => r.id === recipeId);
+    if (!recipe) return;
+
+    const newInventory = { ...currentTeam.inventory };
+
+    // Проверка ресурсов
+    for (let ing of recipe.ingredients) {
+        if ((newInventory[ing.id] || 0) < ing.count) {
+            alert("Ошибка: Кто-то уже потратил ресурсы!");
+            renderCraftRecipes(); 
+            return;
+        }
+    }
+
+    // Списание ресурсов
+    recipe.ingredients.forEach(ing => {
+        newInventory[ing.id] -= ing.count;
+        if (newInventory[ing.id] < 0) newInventory[ing.id] = 0; 
+    });
+
+    // Выдача результата
+    newInventory[recipe.resultId] = (newInventory[recipe.resultId] || 0) + 1;
+
+    // Оптимистичное обновление
+    currentTeam.inventory = newInventory;
+    renderGameInterface();
+    renderCraftRecipes(); 
+    
+    if (navigator.vibrate) navigator.vibrate(50);
+
+    // Сохранение в базу
+    const { error } = await supabase
+        .from('teams')
+        .update({ inventory: newInventory })
+        .eq('id', me.team_id);
+
+    if (error) {
+        console.error("Craft error", error);
+        alert("Ошибка соединения с хранилищем!");
+        refreshTeamData(); // Откат при ошибке
+    } else {
+        const resultItem = GLOBAL_ITEMS[recipe.resultId];
+        alert(`УСПЕХ! Создан предмет: ${resultItem.name}`);
+    }
+};
+
+// Запуск игры
 initGame();
