@@ -84,7 +84,7 @@ function setStatus(text, ok=true) {
     if(el) { el.textContent = text; el.style.color = ok ? '#6eff9f' : '#ff5555'; }
 }
 
-// ===== ЛОГИКА ВХОДА =====
+// ===== ЛОГИКА ВХОДА (ИСПРАВЛЕННАЯ) =====
 async function handleStartAdventure() {
     const name = document.getElementById('nameInput').value.trim();
     if (!name || !selectedTeamId || !selectedRole) return setStatus('Заполните все поля!', false);
@@ -104,21 +104,40 @@ async function handleStartAdventure() {
         finalRole = 'Explorer'; 
     }
 
-    // 2. Регистрируем/Обновляем
-    let { data: player } = await supabase.from('players').select('*').ilike('name', name).single();
-    
-    if (!player) {
+    // 2. Регистрируем/Обновляем (БЕЗ .single(), ЧТОБЫ ИЗБЕЖАТЬ ОШИБКИ 406)
+    let player = null;
+    const { data: existingPlayers, error: fetchError } = await supabase
+        .from('players')
+        .select('*')
+        .ilike('name', name); // Просто ищем всех с таким именем
+
+    if (fetchError) {
+        console.error(fetchError);
+        return setStatus('Ошибка сети', false);
+    }
+
+    // Если нашли хотя бы одного — берем первого
+    if (existingPlayers && existingPlayers.length > 0) {
+        player = existingPlayers[0];
+        
+        // Обновляем данные существующего
+        if (player.role === 'leader' && player.team_id === selectedTeamId) finalRole = 'leader';
+        
+        await supabase.from('players')
+            .update({ team_id: selectedTeamId, role: finalRole })
+            .eq('id', player.id);
+            
+        player.team_id = selectedTeamId;
+        player.role = finalRole;
+    } else {
+        // Создаем нового
         const { data: newPlayer, error } = await supabase.from('players')
             .insert({ name, team_id: selectedTeamId, role: finalRole })
-            .select().single();
+            .select()
+            .single(); // Здесь single безопасен, так как мы только что создали 1 запись
         
         if (error) return setStatus('Ошибка регистрации', false);
         player = newPlayer;
-    } else {
-        if (player.role === 'leader' && player.team_id === selectedTeamId) finalRole = 'leader';
-        await supabase.from('players').update({ team_id: selectedTeamId, role: finalRole }).eq('id', player.id);
-        player.team_id = selectedTeamId;
-        player.role = finalRole;
     }
 
     localStorage.setItem('playerName', player.name);

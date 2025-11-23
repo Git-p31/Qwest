@@ -1,4 +1,4 @@
-// game.js — FINAL LOGIC: Roles, Cooldowns, Cocoa Cure
+// game.js — FINAL LOGIC: Roles, Cooldowns, Cocoa Cure & NEW ROLES
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 // ===== CONFIG =====
@@ -23,7 +23,9 @@ const ROLES_DATA = {
     Guardian: 'Хранитель', 
     Saboteur: 'Диверсант', 
     Negotiator: 'Переговорщик', 
-    leader: 'Лидер' 
+    leader: 'Лидер',
+    Spy: 'Шпион',           // НОВОЕ
+    Scavenger: 'Кладоискатель' // НОВОЕ
 };
 
 // ===== РЕЦЕПТЫ =====
@@ -77,7 +79,7 @@ async function initGame() {
 
     // 4. Кнопка Обмена (Только Лидер или Переговорщик)
     if (me.role === 'leader' || me.role === 'Negotiator') {
-        document.getElementById('btnShowTrades').classList.remove('hidden');
+        document.getElementById('btnShowTrades')?.classList.remove('hidden');
     }
 
     initMapLogic();
@@ -114,8 +116,10 @@ function setupSubscriptions() {
         supabase.channel('incoming_trades')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trades', filter: `to_team_id=eq.${me.team_id}`}, () => {
                 const btn = document.getElementById('btnShowTrades'); 
-                btn.textContent = "Обмен 🤝 (!)"; 
-                btn.classList.add('pulse-gold');
+                if(btn) {
+                    btn.textContent = "Обмен 🤝 (!)"; 
+                    btn.classList.add('pulse-gold');
+                }
             })
             .subscribe();
     }
@@ -169,7 +173,6 @@ function renderGameInterface() {
                     if (item.id == 12) btnColor = '#5D4037'; // Какао
                     actionBtn = `<button class="btn-use" style="background:${btnColor}" onclick="handleItemUse(${id})">USE</button>`;
                 } else {
-                    // Для других ролей просто показываем, что это гаджет, но без кнопки
                     actionBtn = `<span style="font-size:0.7rem; opacity:0.5;">(Гаджет)</span>`;
                 }
             }
@@ -217,6 +220,17 @@ function renderGameInterface() {
         });
         progressEl.textContent = Math.round((completedCount/tasks.length)*100) + '%';
     }
+
+    // === УПРАВЛЕНИЕ ВИДИМОСТЬЮ КНОПОК НОВЫХ РОЛЕЙ ===
+    ['btnSpyAction', 'btnScavenge', 'btnGuardianWarm'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.classList.add('hidden');
+    });
+
+    if (me.role === 'Spy') document.getElementById('btnSpyAction')?.classList.remove('hidden');
+    if (me.role === 'Scavenger') document.getElementById('btnScavenge')?.classList.remove('hidden');
+    if (me.role === 'Guardian') document.getElementById('btnGuardianWarm')?.classList.remove('hidden');
+    
     renderMembers();
     checkFreezeState(); 
 }
@@ -516,5 +530,129 @@ async function checkGlobalGameState() {
         } else document.getElementById('lastChanceTimer').classList.add('hidden');
     }
 }
+
+// ==========================================
+// ===== НОВЫЕ РОЛИ: ЛОГИКА КНОПОК ======
+// ==========================================
+
+// 1. ШПИОН (Spy) — Разведка
+window.openSpyModal = async () => {
+    if (me.role !== 'Spy') return;
+    
+    // Простой кулдаун (локальный)
+    const lastSpy = localStorage.getItem('lastSpyTime');
+    const now = Date.now();
+    if(lastSpy && (now - lastSpy < 60000)) { // 1 минута
+        const left = Math.ceil((60000 - (now - lastSpy))/1000);
+        return alert(`⏳ Шпионская сеть перезагружается: ${left} сек.`);
+    }
+
+    const { data: teams } = await supabase.from('teams').select('id, name').neq('id', me.team_id);
+    
+    // Используем prompt для выбора цели
+    let promptText = "Введите ID команды для слежки:\n";
+    teams.forEach(t => promptText += `${t.id}: ${t.name}\n`);
+    
+    const targetId = prompt(promptText);
+    if(!targetId) return;
+
+    // Запрос данных
+    const { data: team, error } = await supabase.from('teams').select('inventory, frozen_until, name').eq('id', targetId).single();
+    
+    if(error || !team) return alert("❌ Не удалось получить данные. Возможно, неверный ID.");
+
+    localStorage.setItem('lastSpyTime', now); // Ставим кулдаун
+
+    // Формируем отчет
+    let invText = "Пусто";
+    if (team.inventory) {
+        invText = Object.keys(team.inventory).map(id => {
+            const count = team.inventory[id];
+            const item = GLOBAL_ITEMS[id];
+            return count > 0 ? `• ${item ? item.emoji + ' ' + item.name : '???'} (x${count})` : null;
+        }).filter(Boolean).join('\n');
+    }
+    if (!invText) invText = "Рюкзак пуст.";
+
+    const isFrozen = team.frozen_until && new Date(team.frozen_until) > new Date();
+    const status = isFrozen ? "❄️ ЗАМОРОЖЕНЫ" : "✅ АКТИВНЫ";
+
+    alert(`🕵️ ОТЧЕТ ПО ЦЕЛИ "${team.name}":\n\nСтатус: ${status}\n\n🎒 Инвентарь:\n${invText}`);
+};
+
+// 2. КЛАДОИСКАТЕЛЬ (Scavenger) — Поиск ресурсов
+window.scavengeSnow = async () => {
+    if (me.role !== 'Scavenger') return;
+
+    // Кулдаун 3 минуты
+    const lastDig = localStorage.getItem('lastDigTime');
+    const now = Date.now();
+    if(lastDig && (now - lastDig < 180000)) { 
+        const left = Math.ceil((180000 - (now - lastDig))/1000);
+        return alert(`⏳ Руки замерзли! Отогревайтесь еще ${left} сек.`);
+    }
+
+    if(navigator.vibrate) navigator.vibrate([50, 50, 50]);
+
+    const roll = Math.random();
+    let lootId = null;
+    let msg = "";
+
+    // Логика лута (Предполагаем ID: 1=Лед, 2=Снег, 3=Какао-бобы, 5=Ветка)
+    if (roll < 0.4) {
+        const commonItems = [1, 2, 5]; // ID обычных предметов
+        lootId = commonItems[Math.floor(Math.random() * commonItems.length)];
+        msg = "Вы раскопали сугроб и нашли ресурс!";
+    } else if (roll < 0.6) {
+        msg = "Ничего... только грязный снег.";
+    } else {
+        msg = "Вы нашли старый фантик. Бесполезно.";
+    }
+
+    localStorage.setItem('lastDigTime', now);
+
+    if (lootId) {
+        const item = GLOBAL_ITEMS[lootId] || { name: 'Неизвестно', emoji: '❓' };
+        const newInv = { ...currentTeam.inventory };
+        newInv[lootId] = (newInv[lootId] || 0) + 1;
+        
+        await supabase.from('teams').update({ inventory: newInv }).eq('id', me.team_id);
+        alert(`🎉 ${msg}\nПолучено: ${item.emoji} ${item.name}`);
+    } else {
+        alert(`💨 ${msg}`);
+    }
+};
+
+// 3. ХРАНИТЕЛЬ (Guardian) — Согрев
+window.guardianWarmUp = async () => {
+    if (me.role !== 'Guardian') return;
+    
+    if (!currentTeam.frozen_until || new Date(currentTeam.frozen_until) < new Date()) {
+        return alert("🔥 Ваша команда не заморожена! Тепло хранить не нужно.");
+    }
+
+    // Кулдаун
+    const lastWarm = localStorage.getItem('lastWarmTime');
+    const now = Date.now();
+    if(lastWarm && (now - lastWarm < 30000)) { // 30 сек
+         const left = Math.ceil((30000 - (now - lastWarm))/1000);
+         return alert(`⏳ Магия огня восстанавливается: ${left} сек.`);
+    }
+
+    // Снимаем 30 секунд заморозки
+    const currentFreeze = new Date(currentTeam.frozen_until).getTime();
+    const newFreezeTime = new Date(currentFreeze - 30000); // Минус 30 сек
+    
+    if (newFreezeTime < new Date()) {
+        await supabase.from('teams').update({ frozen_until: null }).eq('id', me.team_id);
+        alert("🔥 ВЫ РАЗМОРОЗИЛИ КОМАНДУ ПОЛНОСТЬЮ!");
+    } else {
+        await supabase.from('teams').update({ frozen_until: newFreezeTime.toISOString() }).eq('id', me.team_id);
+        alert("🔥 ТЕПЛО! Время заморозки сокращено на 30 секунд.");
+    }
+    
+    localStorage.setItem('lastWarmTime', now);
+    if(navigator.vibrate) navigator.vibrate(200);
+};
 
 initGame();

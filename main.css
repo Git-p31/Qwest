@@ -398,12 +398,29 @@ button.secondary {
 /* Блокируем всё, КРОМЕ инвентаря */
 body.frozen-mode .map-window,
 body.frozen-mode .tasks-panel,
-body.frozen-mode .team-info-panel,
-body.frozen-mode .header-right {
+body.frozen-mode .team-info-panel {
     filter: grayscale(1) blur(4px);
     opacity: 0.5;
     pointer-events: none; 
-    transition: filter 0.5s, opacity 0.5s;
+}
+
+/* ВАЖНОЕ ИСПРАВЛЕНИЕ ДЛЯ ХРАНИТЕЛЯ:
+   Блокируем только кнопки в шапке, КРОМЕ кнопки "Огонь" (#btnGuardianWarm).
+   Если заблокировать всю .header-right, Хранитель не сможет разморозить команду!
+*/
+body.frozen-mode .header-right > button:not(#btnGuardianWarm) {
+    filter: grayscale(1) blur(4px);
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* Кнопка Хранителя должна быть доступна и "гореть надеждой" */
+body.frozen-mode #btnGuardianWarm {
+    pointer-events: auto;
+    cursor: pointer;
+    animation: pulse-red 1s infinite alternate;
+    box-shadow: 0 0 20px var(--accent-red);
+    border: 1px solid var(--accent-red);
 }
 
 /* Инвентарь должен быть доступен (спасение) */
