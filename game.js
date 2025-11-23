@@ -1,189 +1,107 @@
-// game.js — FINAL LOGIC: Roles, Cooldowns, Cocoa Cure & NEW ROLES
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+import { 
+    state, GADGET_COOLDOWN_MS, ROLES_DATA, CRAFT_RECIPES,
+    authPlayer, refreshTeamData, fetchAllTeamsData, 
+    setTentStatus, clearTentStatus, craftItemLogic, useGadgetLogic, setupRealtimeListeners,
+    updateTaskAndInventory, fetchGlobalGameState
+} from './engine.js';
 
-// ===== CONFIG =====
-const SUPABASE_URL = 'https://akvvvudcnjnevkzxnfoi.supabase.co'; 
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrdnZ2dWRjbmpuZXZrenhuZm9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1NDMyNDQsImV4cCI6MjA3OTExOTI0NH0.pOA1Ebemf3IYY4ckaDQ31uDr8jMBljAzcnai_MWr2pY'; 
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// ===== CONSTANTS =====
-const GADGET_COOLDOWN_MS = 2 * 60 * 1000; // 2 минуты кулдаун
-
-const TEAMS_STATIC_DATA = [
-    { id: 101, defaultName: 'Снежинки', color: '#8be9fd', symbol: '❄️' },
-    { id: 102, defaultName: 'Елочные Шары', color: '#ff5555', symbol: '🔴' },
-    { id: 103, defaultName: 'Гирлянды', color: '#f1fa8c', symbol: '💡' },
-    { id: 104, defaultName: 'Деды Морозы', color: '#bd93f9', symbol: '🎅' },
-];
-
-// Перевод ролей
-const ROLES_DATA = { 
-    Explorer: 'Исследователь', 
-    Guardian: 'Хранитель', 
-    Saboteur: 'Диверсант', 
-    Negotiator: 'Переговорщик', 
-    leader: 'Лидер',
-    Spy: 'Шпион',           // НОВОЕ
-    Scavenger: 'Кладоискатель' // НОВОЕ
+// ===== UI CONFIG and GLOBALS =====
+const TEAMS_UI_CONFIG = {
+    101: { color: '#8be9fd', symbol: '❄️' },
+    102: { color: '#ff5555', symbol: '🔴' },
+    103: { color: '#f1fa8c', symbol: '💡' },
+    104: { color: '#bd93f9', symbol: '🎅' },
 };
 
-// ===== РЕЦЕПТЫ =====
-const CRAFT_RECIPES = [
-    // ID 11: Лед (Атака)
-    { id: 1, name: "Ледяная Бомба", resultId: 11, description: "Замораживает врагов", ingredients: [{ id: 1, count: 3 }, { id: 2, count: 1 }] },
-    
-    // ID 12: Какао (Лечение + Грязь)
-    { id: 2, name: "Какао-Бомба", resultId: 12, description: "Снимает лед и пачкает", ingredients: [{ id: 3, count: 2 }, { id: 4, count: 1 }] },
-    
-    // ID 13: Огненная руна (Резерв или Защита)
-    { id: 3, name: "Огненная Руна", resultId: 13, description: "Магическая защита", ingredients: [{ id: 5, count: 1 }, { id: 2, count: 1 }] }
+const STATIC_MAP_ITEMS = [
+  {id: 'tent1', type:'tent', x: 28, y: 62, title: 'Палатка A (Север)', desc: 'Точка обмена ресурсами.'},
+  {id: 'tent2', type:'tent', x: 60, y: 62, title: 'Палатка B (Юг)', desc: 'Точка обмена ресурсами.'},
+  {id: 'npc1', type:'npc', x: 45, y: 38, title: 'Инфо-центр', desc: 'Квесты.'},
+  {id: 'npc2', type:'npc', x: 52, y: 46, title: 'Квест-Мастер', desc: 'Задания.'},
 ];
 
-// Глобальные переменные
-let me = null; 
-let currentTeam = null; 
-let GLOBAL_ITEMS = {}; 
-let lastGadgetUsageTime = 0; // Для локального кулдауна
-
-// Финал
-let hasShownVictory = false; 
-let hasShownGameOver = false; 
-let deadlineTimestamp = null;
+let map = null;
+let mapMarkers = {};
+let wasFrozen = false;
 let timerUiInterval = null;
+let hasShownVictory = false;
 
-// ===== INIT =====
+// ===== INITIALIZATION & CORE =====
 async function initGame() {
-    const storedName = localStorage.getItem('playerName');
-    if (!storedName) return window.location.href = 'index.html'; 
+    const player = await authPlayer();
+    if (!player) return alert("Ошибка входа! Игрок не найден.");
 
-    // 1. Загрузка Items
-    const { data: items } = await supabase.from('items').select('*');
-    if (items) items.forEach(i => GLOBAL_ITEMS[i.id] = i);
-
-    // 2. Загрузка Player
-    const { data: player } = await supabase.from('players').select('*').ilike('name', storedName).single();
-    if (!player) {
-        localStorage.removeItem('playerName');
-        return window.location.href = 'index.html';
-    }
-    me = player;
-
-    // 3. UI Header
-    document.getElementById('myNameHeader').textContent = me.name;
-    document.getElementById('myPlayerRole').textContent = ROLES_DATA[me.role] || me.role;
-    document.getElementById('btnLogout').addEventListener('click', () => { 
-        localStorage.removeItem('playerName'); 
-        window.location.href='index.html'; 
-    });
-
-    // 4. Кнопка Обмена (Только Лидер или Переговорщик)
-    if (me.role === 'leader' || me.role === 'Negotiator') {
-        document.getElementById('btnShowTrades')?.classList.remove('hidden');
-    }
-
-    initMapLogic();
-    await refreshTeamData();
-    setupSubscriptions();
-    checkGlobalGameState();
-    createSnowEffect();
-}
-
-function initMapLogic() {
-    const mapBlock = document.querySelector('.map-placeholder');
-    if(mapBlock) {
-        mapBlock.innerHTML = `<img src="https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=800&q=80" style="width:100%; height:100%; object-fit:cover; border-radius:12px; opacity:0.8;" alt="Карта">`;
-    }
-}
-
-// ===== REALTIME =====
-function setupSubscriptions() {
-    supabase.channel('my_team')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'teams', filter: `id=eq.${me.team_id}`}, payload => { 
-            currentTeam = {...currentTeam, ...payload.new}; 
-            renderGameInterface(); 
-            checkGlobalGameState();
-            checkFreezeState();
-            if (!document.getElementById('craftModal').classList.contains('hidden')) renderCraftRecipes();
-        })
-        .subscribe();
-
-    supabase.channel('team_members')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `team_id=eq.${me.team_id}`}, () => refreshTeamData())
-        .subscribe();
-
-    if (me.role === 'leader' || me.role === 'Negotiator') {
-        supabase.channel('incoming_trades')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trades', filter: `to_team_id=eq.${me.team_id}`}, () => {
-                const btn = document.getElementById('btnShowTrades'); 
-                if(btn) {
-                    btn.textContent = "Обмен 🤝 (!)"; 
-                    btn.classList.add('pulse-gold');
-                }
-            })
-            .subscribe();
-    }
+    document.getElementById('myNameHeader').textContent = state.me.name;
+    document.getElementById('myPlayerRole').textContent = ROLES_DATA[state.me.role] || state.me.role;
     
-    supabase.channel('global_state')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => checkGlobalGameState())
-        .subscribe();
+    // Role Buttons Visibility
+    if (state.me.role === 'Spy') document.getElementById('btnSpyAction')?.classList.remove('hidden');
+    if (state.me.role === 'Scavenger') document.getElementById('btnScavenge')?.classList.remove('hidden');
+    if (state.me.role === 'Guardian') document.getElementById('btnGuardianWarm')?.classList.remove('hidden');
 
-    supabase.channel('my_player_kick')
-        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'players', filter: `id=eq.${me.id}` }, () => {
-            alert('🚫 Вы были исключены.');
-            localStorage.removeItem('playerName');
-            window.location.href = 'index.html';
-        })
-        .subscribe();
-}
-
-// ===== UI & RENDER =====
-async function refreshTeamData() {
-    const { data: team, error } = await supabase.from('teams').select('*').eq('id', me.team_id).single();
-    if (error || !team) return;
-    currentTeam = team; 
+    await fetchAllTeamsData();
+    await refreshTeamData();
+    
+    initMapLogic();
     renderGameInterface();
+    createSnowEffect();
+
+    setupRealtimeListeners(
+        async (newTeam, oldTeam) => {
+            await refreshTeamData(); 
+            renderGameInterface();
+        },
+        (updatedTeam) => {
+            renderMarkers(); 
+            if (state.currentTeam?.current_tent_id && updatedTeam.current_tent_id === state.currentTeam.current_tent_id && updatedTeam.id !== state.me.team_id) {
+                performExchange(updatedTeam);
+            }
+            // Global Timer check is now integrated here if needed.
+        }
+    );
+
+    if(['leader', 'Negotiator'].includes(state.me.role)) clearTentStatus();
 }
+
+// ================= UI RENDERERS =================
 
 function renderGameInterface() {
-    if(!currentTeam) return;
-    const staticInfo = TEAMS_STATIC_DATA.find(t => t.id === currentTeam.id);
-    const name = currentTeam.name_by_leader || currentTeam.name;
-    
-    document.getElementById('myTeamName').innerHTML = `${name} ${staticInfo.symbol}`;
-    if(currentTeam.selfie_url) document.getElementById('myTeamAvatar').style.backgroundImage = `url('${currentTeam.selfie_url}')`;
+    if(!state.currentTeam) return;
 
+    const uiCfg = TEAMS_UI_CONFIG[state.currentTeam.id] || {symbol: '🎄'};
+    const name = state.currentTeam.name_by_leader || state.currentTeam.name;
+    document.getElementById('myTeamName').innerHTML = `${name} ${uiCfg.symbol}`;
+    if(state.currentTeam.selfie_url) document.getElementById('myTeamAvatar').style.backgroundImage = `url('${state.currentTeam.selfie_url}')`;
+
+    renderInventory();
+    renderTasks();
+    renderMembers();
+    checkFreezeState();
+}
+
+function renderInventory() {
     const list = document.getElementById('inventoryList'); list.innerHTML = '';
-    const inv = currentTeam.inventory || {};
+    const inv = state.currentTeam.inventory || {};
     let hasItems = false;
 
     Object.keys(inv).forEach(id => {
         if(inv[id] > 0) {
             hasItems = true;
-            const item = GLOBAL_ITEMS[id] || {name:'???', emoji:'📦', type:'item'};
-            let style = item.type === 'story' ? 'border-left: 3px solid var(--accent-gold)' : '';
-            
-            // Кнопка USE (Только Диверсант может использовать гаджеты)
+            const item = state.globalItems[id] || {name:'???', emoji:'📦', type:'item'};
             let actionBtn = '';
-            if (item.type === 'gadget') {
-                if (me.role === 'Saboteur') {
-                    // Цвета кнопок
-                    let btnColor = '#ff5555'; 
-                    if (item.id == 11) btnColor = '#8be9fd'; // Лед
-                    if (item.id == 12) btnColor = '#5D4037'; // Какао
-                    actionBtn = `<button class="btn-use" style="background:${btnColor}" onclick="handleItemUse(${id})">USE</button>`;
-                } else {
-                    actionBtn = `<span style="font-size:0.7rem; opacity:0.5;">(Гаджет)</span>`;
-                }
+            
+            if (item.type === 'gadget' && state.me.role === 'Saboteur') {
+                actionBtn = `<button class="btn-use" onclick="window.handleItemUse(${id})">USE</button>`;
+            } else if (item.type === 'gadget') {
+                actionBtn = `<span style="font-size:0.7rem; opacity:0.5;">(Гаджет)</span>`;
             }
 
             list.innerHTML += `
-            <li style="${style}">
+            <li>
                 <div style="display:flex;align-items:center;gap:10px; flex-grow: 1;">
                     <span style="font-size:1.5rem">${item.emoji}</span> 
                     <div style="display:flex; flex-direction:column;">
                         <span style="font-weight:bold; font-size:0.9rem;">${item.name}</span>
-                        <span class="muted" style="font-size:0.7rem">${item.description || ''}</span>
                     </div>
                 </div>
                 <div style="display:flex; align-items:center; gap: 10px;">
@@ -193,58 +111,376 @@ function renderGameInterface() {
             </li>`;
         }
     });
-    if(!hasItems) list.innerHTML = '<li class="muted" style="justify-content:center">Пусто...</li>';
+    if(!hasItems) list.innerHTML = '<li class="muted" style="justify-content:center; padding:10px;">Пусто...</li>';
+}
 
-    // Tasks
+function renderTasks() {
     const tbody = document.getElementById('tasksTableBody');
     const progressEl = document.getElementById('taskProgress');
     tbody.innerHTML = '';
-    const tasks = currentTeam.tasks || [];
+    
+    const tasks = state.currentTeam.tasks || [];
     let completedCount = 0;
-    if (tasks.length === 0) tbody.innerHTML = '<tr><td colspan="3" class="muted" style="text-align:center; padding:20px;">Нет задач</td></tr>'; 
-    else {
-        tasks.forEach(task => {
-            if(task.completed) completedCount++;
-            const tr = document.createElement('tr'); tr.className = `task-row ${task.completed ? 'completed' : ''}`;
-            let canCheck = (me.role === 'leader');
-            if(task.type === 'requirement' && !task.completed) {
-                const hasItem = (inv[task.required_item_id] || 0) > 0;
-                if(hasItem) tr.classList.add('ready'); else { tr.classList.add('locked'); canCheck = false; }
-            }
-            const isChecked = task.completed ? 'checked disabled' : '';
-            const isDisabled = !canCheck ? 'disabled' : '';
-            const checkbox = `<input type="checkbox" class="task-check-input" ${isChecked} ${isDisabled} onclick="toggleTask(${task.id}, this)">`;
-            const reward = task.type === 'reward' && task.reward_item_id ? (GLOBAL_ITEMS[task.reward_item_id]?.emoji || '🎁') : '';
-            tr.innerHTML = `<td style="text-align:center">${checkbox}</td><td>${task.text}</td><td style="text-align:center;font-size:1.2rem">${reward}</td>`;
-            tbody.appendChild(tr);
-        });
-        progressEl.textContent = Math.round((completedCount/tasks.length)*100) + '%';
+
+    if (tasks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="muted" style="text-align:center; padding:15px;">Нет активных задач</td></tr>';
+        progressEl.textContent = '0%';
+        return;
     }
 
-    // === УПРАВЛЕНИЕ ВИДИМОСТЬЮ КНОПОК НОВЫХ РОЛЕЙ ===
-    ['btnSpyAction', 'btnScavenge', 'btnGuardianWarm'].forEach(id => {
-        const el = document.getElementById(id);
-        if(el) el.classList.add('hidden');
+    tasks.forEach(task => {
+        if(task.completed) completedCount++;
+        const isChecked = task.completed ? 'checked disabled' : ''; 
+        const isDisabled = state.me.role !== 'leader' ? 'disabled' : '';
+        
+        const reward = task.reward_item_id 
+            ? (state.globalItems[task.reward_item_id]?.emoji || '🎁') 
+            : '';
+
+        const tr = document.createElement('tr');
+        tr.className = task.completed ? 'task-row completed' : 'task-row';
+        tr.innerHTML = `
+            <td style="text-align:center; width:30px;">
+                <input type="checkbox" ${isChecked} ${isDisabled} onclick="window.toggleTask(${task.id}, this)">
+            </td>
+            <td>${task.text}</td>
+            <td style="text-align:center; font-size:1.2rem;">${reward}</td>
+        `;
+        tbody.appendChild(tr);
     });
 
-    if (me.role === 'Spy') document.getElementById('btnSpyAction')?.classList.remove('hidden');
-    if (me.role === 'Scavenger') document.getElementById('btnScavenge')?.classList.remove('hidden');
-    if (me.role === 'Guardian') document.getElementById('btnGuardianWarm')?.classList.remove('hidden');
-    
-    renderMembers();
-    checkFreezeState(); 
+    progressEl.textContent = Math.round((completedCount / tasks.length) * 100) + '%';
 }
 
-// =============================================
-// ===== VFX: ЭФФЕКТЫ ===============
-// =============================================
+function renderMembers() {
+    const list = document.getElementById('currentTeamMembersList');
+    const countEl = document.getElementById('myTeamMembersCount');
+    
+    list.innerHTML = '';
+    countEl.textContent = state.teamMembers.length;
 
-// 1. СНЕГ
+    state.teamMembers.forEach(m => {
+        const roleName = ROLES_DATA[m.role] || m.role;
+        const isMe = m.id === state.me.id ? ' (Вы)' : '';
+        const icon = m.role === 'leader' ? '👑' : '👤';
+        
+        list.innerHTML += `
+            <li style="display:flex; align-items:center; width:100%; padding: 8px 10px; border-bottom:1px solid rgba(255,255,255,0.05);">
+                <span style="margin-right:8px; font-size:1.2rem;">${icon}</span>
+                <div style="display:flex; flex-direction:column;">
+                    <span style="font-weight:600; color:#fff;">${m.name}${isMe}</span>
+                    <span style="font-size:0.8rem; color:var(--text-muted);">${roleName}</span>
+                </div>
+            </li>`;
+    });
+}
+
+// ================= ЗАДАЧИ И НАГРАДЫ (CORE) =================
+window.toggleTask = async (taskId, checkboxEl) => {
+    if(state.me.role !== 'leader') { 
+        checkboxEl.checked = !checkboxEl.checked; 
+        return alert("Только лидер может отмечать задачи!"); 
+    }
+    
+    const task = state.currentTeam.tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
+    const isChecking = checkboxEl.checked;
+    let newInventory = { ...state.currentTeam.inventory };
+    
+    if (isChecking) {
+        if (task.required_item_id) { 
+            if ((newInventory[task.required_item_id] || 0) < 1) { 
+                alert(`Не хватает предмета: ${state.globalItems[task.required_item_id]?.name || '???'}`); 
+                checkboxEl.checked = false;
+                return;
+            }
+            newInventory[task.required_item_id]--;
+        }
+        
+        if (task.reward_item_id) { 
+            const rewardId = task.reward_item_id;
+            newInventory[rewardId] = (newInventory[rewardId] || 0) + 1;
+            alert(`🎉 Получена награда: ${state.globalItems[rewardId]?.name}!`);
+        }
+    } 
+    
+    const newTasks = state.currentTeam.tasks.map(t => t.id === taskId ? {...t, completed: isChecking} : t);
+
+    const result = await updateTaskAndInventory(state.me.team_id, newTasks, newInventory);
+    
+    if (!result.success) {
+        console.error('Task update error:', result.error);
+        alert('Ошибка сохранения задачи!');
+        checkboxEl.checked = !isChecking;
+        return;
+    }
+};
+
+// ================= СПРАВОЧНИК (ФИКС БАГА 1) =================
+
+window.openItemsGuide = () => { 
+    document.getElementById('itemsGuideModal').classList.remove('hidden'); 
+    const tbody = document.querySelector('#itemsGuideModal tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = Object.values(state.globalItems).map(i => `
+        <tr class="guide-item-row">
+            <td class="guide-icon" style="font-size:2rem; text-align:center;">${i.emoji || '❓'}</td>
+            <td class="guide-info" style="padding:10px;">
+                <h4>${i.name}</h4>
+                <p class="muted">${i.description || 'Нет описания'}</p>
+            </td>
+        </tr>
+    `).join('');
+};
+
+window.closeItemsGuide = () => document.getElementById('itemsGuideModal').classList.add('hidden');
+
+
+// ================= ГЛОБАЛЬНЫЙ СТАТУС И ТАЙМЕР (ВОССТАНОВЛЕНО) =================
+
+async function checkGlobalGameState() {
+    const teams = await fetchGlobalGameState(); 
+    if (!teams) return;
+    
+    const winners = teams.filter(t => t.tasks && t.tasks.length > 0 && t.tasks.every(task => task.completed));
+    const amIWinner = winners.some(w => w.id === state.me.team_id);
+    const lastChanceEl = document.getElementById('lastChanceTimer');
+    const timerEl = document.getElementById('timerCountdown');
+    
+    // 1. Победа 
+    if (amIWinner && !hasShownVictory) { 
+        console.log("ПОБЕДА!");
+        hasShownVictory = true; 
+    }
+    
+    // 2. Последний шанс (Нужно хотя бы 2 победителя)
+    if (winners.length >= 2 && !amIWinner) {
+        const secondWinnerTime = new Date(winners[1].updated_at).getTime();
+        const deadline = secondWinnerTime + (5 * 60 * 1000); 
+        
+        lastChanceEl?.classList.remove('hidden');
+        
+        if (!timerUiInterval) { 
+            timerUiInterval = setInterval(() => {
+                const left = deadline - Date.now();
+                
+                if (left <= 0) {
+                     if(timerEl) timerEl.textContent = "00:00";
+                     clearInterval(timerUiInterval);
+                     timerUiInterval = null;
+                     alert("Время истекло! Игра закончена.");
+                } else {
+                     const m = Math.floor(left / 60000); 
+                     const s = Math.floor((left % 60000) / 1000);
+                     if(timerEl) timerEl.textContent = `${m}:${s < 10 ? '0' : ''}${s}`;
+                }
+            }, 1000); 
+        }
+    } else {
+        lastChanceEl?.classList.add('hidden');
+        if(timerUiInterval) {
+            clearInterval(timerUiInterval);
+            timerUiInterval = null;
+        }
+    }
+}
+
+
+// ================= TENTS & MAP (CORE) =================
+
+function initMapLogic() {
+    if (map) map.remove();
+    map = L.map('interactiveMap', { crs: L.CRS.Simple, minZoom: -2, maxZoom: 2, zoomControl: false, attributionControl: false });
+    const bounds = [[0, 0], [1500, 2000]];
+    L.imageOverlay('map.png', bounds).addTo(map);
+    map.fitBounds(bounds);
+    map.on('click', () => document.getElementById('interactionModal').classList.add('hidden'));
+
+    renderMarkers();
+    setInterval(() => {
+        state.otherTeams.forEach(t => {
+            t.x = Math.max(10, Math.min(90, t.x + (Math.random() - 0.5)));
+            t.y = Math.max(10, Math.min(90, t.y + (Math.random() - 0.5)));
+        });
+        renderMarkers();
+    }, 3000);
+}
+
+function renderMarkers() {
+    if(!map) return;
+    
+    STATIC_MAP_ITEMS.forEach(item => updateMarker(item.id, item.type, item.x, item.y, item.title, item));
+    
+    state.otherTeams.forEach(t => {
+        const symbol = TEAMS_UI_CONFIG[t.id]?.symbol || '👥';
+        updateMarker('team_'+t.id, 'team', t.x, t.y, `${t.name}`, { title: t.name, desc: `Игроков: ${t.playerCount}` }, symbol);
+    });
+
+    updateMarker('me', 'me', 50, 85, 'Я', {title:'Вы', desc:'Ваша позиция'});
+}
+
+function updateMarker(id, type, x, y, label, data, customSymbol) {
+    const loc = [1500 - ((y / 100) * 1500), (x / 100) * 2000];
+    let symbol = '📍';
+    if(type === 'tent') symbol = '⛺';
+    if(type === 'me') symbol = '🔴';
+    if(customSymbol) symbol = customSymbol;
+
+    const html = `<div class="marker ${type}"><div class="pin"><div>${symbol}</div></div><div class="label">${label}</div></div>`;
+    const icon = L.divIcon({ className: 'custom-leaflet-icon', html: html, iconSize: [40, 60], iconAnchor: [20, 50] });
+
+    if (mapMarkers[id]) mapMarkers[id].setLatLng(loc);
+    else {
+        const m = L.marker(loc, {icon: icon}).addTo(map);
+        m.on('click', (e) => { L.DomEvent.stopPropagation(e); showPopup(data, type, id); map.flyTo(loc, map.getZoom()); });
+        mapMarkers[id] = m;
+    }
+}
+
+// ================= MODALS & ACTIONS (CORE) =================
+
+function showPopup(item, type, id) {
+    const modal = document.getElementById('interactionModal');
+    const titleEl = document.getElementById('interactTitle');
+    const descEl = document.getElementById('interactDesc');
+    const btns = document.getElementById('interactButtons');
+    
+    titleEl.textContent = item.title;
+    descEl.innerHTML = item.desc || '';
+    btns.innerHTML = '';
+
+    if (type === 'tent') {
+        if (['leader', 'Negotiator'].includes(state.me.role)) {
+            btns.innerHTML = `
+                <button class="start-button" style="background: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 100%); color:#333; font-weight:900;" onclick="window.enterTent('${id}')">
+                    ОБМЕНЯТЬСЯ 🤝
+                </button>
+            `;
+        } else {
+            descEl.innerHTML += `<br><br><span class="muted" style="color:#ff5555">Только Лидер или Переговорщик могут начать обмен.</span>`;
+        }
+    }
+    
+    modal.classList.remove('hidden');
+}
+
+window.enterTent = async (tentId) => {
+    const descEl = document.getElementById('interactDesc');
+    const btns = document.getElementById('interactButtons');
+
+    descEl.innerHTML = `
+        <div class="tent-waiting">
+            <div class="loader-spinner"></div>
+            <p style="font-size:1.1rem; margin-bottom:5px;">Ждем другую команду...</p>
+            <p class="muted" style="font-size:0.8rem; line-height:1.4;">Когда вторая команда придет сюда и нажмет "Обмен", произойдет сделка.</p>
+        </div>
+    `;
+    
+    btns.innerHTML = `<button class="secondary" style="border:1px solid #555; color:#ccc;" onclick="window.leaveTent()">Отмена</button>`;
+    
+    const partner = await setTentStatus(tentId);
+    
+    if(partner) performExchange(partner);
+};
+
+window.leaveTent = async () => {
+    document.getElementById('interactionModal').classList.add('hidden');
+    await clearTentStatus(); 
+};
+
+function performExchange(partner) {
+    const descEl = document.getElementById('interactDesc');
+    const btns = document.getElementById('interactButtons');
+
+    descEl.innerHTML = `
+        <div style="text-align:center; padding:20px;">
+            <div style="font-size:3rem;">✅</div>
+            <h3 style="color:#00D68F; margin:10px 0;">УСПЕХ!</h3>
+            <p>Обмен с командой:</p>
+            <strong style="color:var(--accent-gold); font-size:1.2rem;">${partner.name}</strong>
+        </div>
+    `;
+    btns.innerHTML = `<button class="start-button" onclick="window.leaveTent()">Готово</button>`;
+    
+    if(navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    setTimeout(() => clearTentStatus(), 3000); 
+}
+
+// --- Crafting ---
+window.openCraftModal = () => {
+    if(state.me.role !== 'Explorer') return alert("Только Исследователь!");
+    document.getElementById('craftModal').classList.remove('hidden');
+    renderCraftUI();
+};
+
+function renderCraftUI() {
+    const cont = document.getElementById('craftRecipesList'); cont.innerHTML = '';
+    const inv = state.currentTeam.inventory || {};
+    
+    CRAFT_RECIPES.forEach(r => {
+        const resItem = state.globalItems[r.resultId];
+        let can = true;
+        const ingHTML = r.ingredients.map(ing => {
+            const has = inv[ing.id] || 0;
+            if(has < ing.count) can = false;
+            return `<div class="ingredient-box ${has >= ing.count?'has-it':'missing'}"><span class="ing-icon">${state.globalItems[ing.id]?.emoji || '❓'}</span><span class="ing-count">${has}/${ing.count}</span></div>`;
+        }).join('');
+
+        cont.innerHTML += `
+        <div class="craft-recipe">
+            <div class="recipe-header"><strong>${r.name}</strong></div>
+            <div class="recipe-row">
+                <div class="ingredients-group">${ingHTML}</div>
+                <div class="arrow-sign">➔</div>
+                <div class="craft-result">${resItem?.emoji || '❓'}</div>
+            </div>
+            <button class="start-button" style="${can?'':'opacity:0.5'}" onclick="${can?`window.doCraft(${r.id})`:''}">СОЗДАТЬ</button>
+        </div>`;
+    });
+}
+
+window.doCraft = async (rid) => {
+    const res = await craftItemLogic(rid);
+    if(res.success) { alert(`Создано: ${res.itemName}`); renderCraftUI(); renderGameInterface(); }
+    else alert(res.msg);
+};
+
+window.handleItemUse = async (id) => {
+    const now = Date.now();
+    if(now - state.lastGadgetUsage < GADGET_COOLDOWN_MS) return alert("Перезарядка...");
+    
+    if(id == 11) { 
+        const targetId = prompt("ID цели (101-104):");
+        if(targetId) {
+            const res = await useGadgetLogic(id, targetId);
+            if(res.success) alert("Успех!"); else alert(res.msg);
+        }
+    } else {
+         alert("Гаджет не настроен для использования.");
+    }
+};
+
+function checkFreezeState() {
+    const isFrozen = state.currentTeam?.frozen_until && new Date(state.currentTeam.frozen_until) > new Date();
+    const overlay = document.getElementById('iceOverlay');
+    
+    if(isFrozen && !wasFrozen) {
+        document.body.classList.add('frozen-mode', 'body-shake');
+        overlay.classList.remove('hidden'); overlay.classList.add('smash');
+        wasFrozen = true;
+    } else if(!isFrozen && wasFrozen) {
+        document.body.classList.remove('frozen-mode', 'body-shake');
+        overlay.classList.add('hidden');
+        wasFrozen = false;
+    }
+}
+
 function createSnowEffect() {
     const cvs = document.getElementById('snowCanvas'); if(!cvs) return;
     const ctx = cvs.getContext('2d');
-    let W = window.innerWidth, H = window.innerHeight;
-    window.addEventListener('resize', () => { W=window.innerWidth; H=window.innerHeight; cvs.width=W; cvs.height=H; });
+    let W=window.innerWidth, H=window.innerHeight;
     cvs.width=W; cvs.height=H;
     const f=Array.from({length:40},()=>({x:Math.random()*W,y:Math.random()*H,s:Math.random()+1}));
     setInterval(()=>{
@@ -253,406 +489,5 @@ function createSnowEffect() {
     },40);
 }
 
-// 2. ЛЕД
-let iceAnimFrameId = null;
-const iceParticles = [];
-const iceSprite = new Image();
-iceSprite.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2300FFFF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='2' x2='12' y2='22'/%3E%3Cline x1='12' y1='2' x2='8' y2='6'/%3E%3Cline x1='12' y1='2' x2='16' y2='6'/%3E%3Cline x1='2' y1='12' x2='22' y2='12'/%3E%3Cline x1='2' y1='12' x2='6' y2='8'/%3E%3Cline x1='2' y1='12' x2='6' y2='16'/%3E%3Cline x1='12' y1='22' x2='8' y2='18'/%3E%3Cline x1='12' y1='22' x2='16' y2='18'/%3E%3Cline x1='22' y1='12' x2='18' y2='8'/%3E%3Cline x1='22' y1='12' x2='18' y2='16'/%3E%3C/svg%3E";
-
-function startIceFallAnimation() {
-    const canvas = document.getElementById('iceFallCanvas'); if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    canvas.classList.remove('hidden');
-    let W = window.innerWidth, H = window.innerHeight;
-    canvas.width = W; canvas.height = H;
-    if (iceParticles.length === 0) {
-        const count = Math.floor(Math.random() * 15) + 20;
-        for (let i = 0; i < count; i++) {
-            iceParticles.push({ x: Math.random() * W, y: Math.random() * H - H, speed: Math.random() * 4 + 2, size: Math.random() * 20 + 15, rot: Math.random() * Math.PI * 2, rotSpeed: (Math.random() - 0.5) * 0.05 });
-        }
-    }
-    function draw() {
-        ctx.clearRect(0, 0, W, H); ctx.shadowBlur = 10; ctx.shadowColor = "rgba(0, 255, 255, 0.8)";
-        for (let i = 0; i < iceParticles.length; i++) {
-            let p = iceParticles[i]; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.drawImage(iceSprite, -p.size / 2, -p.size / 2, p.size, p.size); ctx.restore();
-            p.y += p.speed; p.x += Math.sin(p.y / 50) * 0.5; p.rot += p.rotSpeed;
-            if (p.y > H + 50) { p.y = -50; p.x = Math.random() * W; }
-        }
-        iceAnimFrameId = requestAnimationFrame(draw);
-    }
-    if (!iceAnimFrameId) draw();
-}
-function stopIceFallAnimation() {
-    const canvas = document.getElementById('iceFallCanvas');
-    if (iceAnimFrameId) { cancelAnimationFrame(iceAnimFrameId); iceAnimFrameId = null; }
-    if (canvas) { const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height); canvas.classList.add('hidden'); }
-    iceParticles.length = 0; 
-}
-
-// 3. КАКАО
-window.triggerCocoaEffect = () => {
-    const overlay = document.getElementById('cocoaOverlay');
-    const audio = document.getElementById('lavaAudio');
-    if (!overlay) return;
-    overlay.classList.remove('hidden'); overlay.innerHTML = ''; 
-    if(audio) { audio.currentTime = 0; audio.playbackRate = 0.9 + Math.random() * 0.2; audio.play().catch(() => {}); }
-    const count = Math.floor(Math.random() * 6) + 14; 
-    for (let i = 0; i < count; i++) {
-        const wrapper = document.createElement('div'); wrapper.classList.add('cocoa-wrapper');
-        const shape = document.createElement('div'); shape.classList.add('cocoa-shape');
-        const size = Math.floor(Math.random() * 140) + 60; 
-        wrapper.style.width = `${size}px`; wrapper.style.height = `${size}px`; wrapper.style.left = `${Math.random() * 90}%`; wrapper.style.top = `${Math.random() * 50}%`; 
-        const r = () => Math.floor(Math.random() * 50) + 25; 
-        shape.style.borderRadius = `${r()}% ${r()}% ${r()}% ${r()}% / ${r()}% ${r()}% ${r()}% ${r()}%`;
-        shape.style.rotate = `${Math.random() * 360}deg`; 
-        wrapper.style.animationDuration = `${3 + Math.random() * 3}s`; 
-        const delay = Math.random() * 0.5; wrapper.style.animationDelay = `${delay}s`; shape.style.animationDelay = `${delay}s`; 
-        wrapper.appendChild(shape); overlay.appendChild(wrapper);
-    }
-    setTimeout(() => { overlay.innerHTML = ''; overlay.classList.add('hidden'); }, 7000);
-};
-
-// 4. ЛОГИКА ЗАМОРОЗКИ
-let wasFrozen = false; 
-function checkFreezeState() {
-    if (!currentTeam) return;
-    const isFrozen = currentTeam.frozen_until && new Date(currentTeam.frozen_until) > new Date();
-    const body = document.body;
-    const iceOverlay = document.getElementById('iceOverlay');
-
-    if (isFrozen) {
-        if (!wasFrozen) {
-            body.classList.add('frozen-mode', 'body-shake');
-            iceOverlay.classList.remove('hidden'); iceOverlay.classList.add('smash');
-            startIceFallAnimation(); 
-            setTimeout(() => { iceOverlay.classList.remove('smash'); body.classList.remove('body-shake'); }, 500);
-            wasFrozen = true;
-            if (navigator.vibrate) navigator.vibrate([200, 50, 200]);
-        }
-        const left = Math.ceil((new Date(currentTeam.frozen_until) - new Date()) / 1000);
-        document.getElementById('myTeamName').innerHTML = `<span style="color:var(--accent-ice);">❄️ ${left}с</span>`;
-        setTimeout(checkFreezeState, 1000);
-    } else if (wasFrozen) {
-        // Разморозка
-        document.getElementById('fireOverlay').classList.remove('hidden');
-        document.getElementById('fireOverlay').classList.add('boom');
-        body.classList.remove('frozen-mode');
-        iceOverlay.classList.add('hidden');
-        stopIceFallAnimation(); 
-        setTimeout(() => document.getElementById('fireOverlay').classList.add('hidden'), 1200);
-        wasFrozen = false;
-        const staticInfo = TEAMS_STATIC_DATA.find(t => t.id === currentTeam.id);
-        document.getElementById('myTeamName').innerHTML = `${currentTeam.name_by_leader || currentTeam.name} ${staticInfo.symbol}`;
-        if (navigator.vibrate) navigator.vibrate(100);
-    }
-}
-
-// ===== ОБРАБОТКА ИСПОЛЬЗОВАНИЯ (LOGIC) =====
-window.handleItemUse = async (itemId) => {
-    // 1. Проверка Роли: Только ДИВЕРСАНТ
-    if (me.role !== 'Saboteur') {
-        alert("🚫 Только Диверсант может использовать гаджеты!");
-        return;
-    }
-
-    // 2. Проверка Кулдауна (2 минуты)
-    const now = Date.now();
-    if (now - lastGadgetUsageTime < GADGET_COOLDOWN_MS) {
-        const remaining = Math.ceil((GADGET_COOLDOWN_MS - (now - lastGadgetUsageTime)) / 1000);
-        alert(`⏳ Перезарядка гаджетов: ${remaining} сек.`);
-        return;
-    }
-
-    // 3. Использование
-    if (itemId == 11) {
-        // ЛЕД: Выбор цели
-        openTargetModal(itemId);
-    } 
-    else if (itemId == 12) {
-        // КАКАО: Лечит (снимает лед) и дает эффект
-        // Если мы заморожены — используем на себя (лечение)
-        const isFrozen = currentTeam.frozen_until && new Date(currentTeam.frozen_until) > new Date();
-        
-        triggerCocoaEffect(); // Визуал всегда
-
-        if (isFrozen) {
-            // Снимаем заморозку с себя
-            await executeGadget(itemId, me.team_id); 
-        } else {
-            // Если не заморожены, можно просто потратить (или кинуть в кого-то, если нужно)
-            // В текущей логике: тратим на себя как "напиток"
-            await executeGadget(itemId, me.team_id);
-        }
-    }
-    else if (itemId == 13) {
-        // ОГОНЬ: Тоже снимает лед (резерв)
-        await executeGadget(itemId, me.team_id); 
-    }
-};
-
-window.openTargetModal = async (itemId) => {
-    document.getElementById('targetModal').classList.remove('hidden');
-    const select = document.getElementById('targetSelect');
-    select.innerHTML = '<option>Поиск...</option>';
-    const { data: teams } = await supabase.from('teams').select('id, name, frozen_until').neq('id', me.team_id);
-    
-    // Фильтруем: Нельзя заморозить того, кто уже заморожен!
-    select.innerHTML = '';
-    teams.forEach(t => {
-        const isFrozen = t.frozen_until && new Date(t.frozen_until) > new Date();
-        if (!isFrozen) {
-            select.innerHTML += `<option value="${t.id}">${t.name}</option>`;
-        }
-    });
-
-    if (select.innerHTML === '') {
-        select.innerHTML = '<option disabled>Все команды уже заморожены!</option>';
-    }
-    
-    document.getElementById('btnConfirmFreeze').onclick = () => {
-        if (!select.value) return;
-        executeGadget(itemId, select.value);
-        document.getElementById('targetModal').classList.add('hidden');
-    };
-};
-window.closeTargetModal = () => document.getElementById('targetModal').classList.add('hidden');
-
-async function executeGadget(itemId, targetId) {
-    const { data, error } = await supabase.rpc('use_gadget', {
-        attacker_team_id: me.team_id,
-        target_team_id: targetId || me.team_id,
-        item_id: parseInt(itemId)
-    });
-
-    if (error || !data.success) {
-        alert('Ошибка: ' + (error?.message || data?.message));
-    } else {
-        // Успех! Записываем время для кулдауна
-        lastGadgetUsageTime = Date.now();
-        
-        const { data: updated } = await supabase.from('teams').select('*').eq('id', me.team_id).single();
-        currentTeam = updated;
-        checkFreezeState(); 
-        renderGameInterface();  
-    }
-}
-
-// ===== КРАФТ (Только ИССЛЕДОВАТЕЛЬ) =====
-window.openCraftModal = () => { 
-    if (me.role !== 'Explorer') return alert("🚫 Только Исследователь может крафтить!");
-    document.getElementById('craftModal').classList.remove('hidden'); 
-    renderCraftRecipes(); 
-};
-
-window.renderCraftRecipes = () => {
-    const container = document.getElementById('craftRecipesList'); container.innerHTML = '';
-    const inv = currentTeam?.inventory || {};
-    CRAFT_RECIPES.forEach(recipe => {
-        const resultItem = GLOBAL_ITEMS[recipe.resultId]; if (!resultItem) return;
-        let canCraft = true;
-        let ingredientsHtml = recipe.ingredients.map((ing, i) => {
-            const itemData = GLOBAL_ITEMS[ing.id] || { emoji: '❓' }; const has = inv[ing.id] || 0;
-            if (has < ing.count) canCraft = false;
-            return `${i > 0 ? '<div class="plus-sign">+</div>' : ''}<div class="ingredient ${has >= ing.count ? 'has-it' : 'missing'}"><div style="font-size:1.5rem">${itemData.emoji}</div><div>${has}/${ing.count}</div></div>`;
-        }).join('');
-        container.innerHTML += `<div class="craft-recipe ${resultItem.rarity ? 'rarity-'+resultItem.rarity : ''}"><div style="display:flex; justify-content:space-between; margin-bottom:10px;"><strong style="color:var(--accent-gold)">${recipe.name}</strong><span class="muted" style="font-size:0.8rem">${recipe.description}</span></div><div class="recipe-row">${ingredientsHtml}<div class="arrow-sign">➔</div><div class="craft-result"><div style="font-size:1.8rem">${resultItem.emoji}</div></div></div><button class="start-button" style="margin-top:10px; padding:10px; font-size:0.9rem; ${canCraft ? '' : 'opacity:0.5; background:#333;'}" onclick="${canCraft ? `craftItem(${recipe.id})` : ''}">${canCraft ? 'СОЗДАТЬ ⚒️' : 'НЕТ РЕСУРСОВ'}</button></div>`;
-    });
-};
-
-window.craftItem = async (recipeId) => {
-    const recipe = CRAFT_RECIPES.find(r => r.id === recipeId);
-    const newInventory = { ...currentTeam.inventory };
-    for (let ing of recipe.ingredients) { if ((newInventory[ing.id] || 0) < ing.count) return alert("Мало ресурсов!"); newInventory[ing.id] -= ing.count; }
-    newInventory[recipe.resultId] = (newInventory[recipe.resultId] || 0) + 1;
-    currentTeam.inventory = newInventory; renderGameInterface(); renderCraftRecipes(); 
-    if (navigator.vibrate) navigator.vibrate(50); alert(`Создан: ${GLOBAL_ITEMS[recipe.resultId].name}`);
-    await supabase.from('teams').update({ inventory: newInventory }).eq('id', me.team_id);
-};
-
-// ===== ОБМЕН (Только ПЕРЕГОВОРЩИК или ЛИДЕР) =====
-window.openIncomingTrades = async () => {
-    if (me.role !== 'Negotiator' && me.role !== 'leader') return alert("🚫 Только Переговорщик!");
-    
-    document.getElementById('incomingTradesModal').classList.remove('hidden'); document.getElementById('btnShowTrades').classList.remove('pulse-gold');
-    const list = document.getElementById('incomingTradesList'); list.innerHTML = `<button class="btn-create-big" onclick="openCreateTrade()"><span>+</span> СОЗДАТЬ</button>`;
-    const { data: trades } = await supabase.from('trades').select('*, teams!from_team_id(name)').eq('to_team_id', me.team_id).eq('status', 'pending');
-    if(!trades?.length) list.innerHTML += '<div class="muted" style="text-align:center;margin-top:20px">Нет предложений</div>';
-    trades.forEach(tr => { const off = GLOBAL_ITEMS[tr.offer_item_id]; const req = GLOBAL_ITEMS[tr.request_item_id]; list.innerHTML += `<div class="trade-card"><div style="color:var(--accent-gold);">От: ${tr.teams.name}</div><div style="display:grid;grid-template-columns:1fr auto 1fr;gap:5px;align-items:center;background:rgba(0,0,0,0.3);padding:10px;border-radius:10px;"><div style="text-align:center"><div style="font-size:1.5rem">${off?.emoji}</div><span style="color:#6eff9f;font-size:0.7rem">ДАЮТ</span></div><div style="opacity:0.5">➔</div><div style="text-align:center"><div style="font-size:1.5rem">${req?.emoji}</div><span style="color:#ff5555;font-size:0.7rem">ПРОСЯТ</span></div></div><div class="trade-actions"><button class="secondary" onclick="rejectTrade(${tr.id})">ОТКАЗ</button><button class="start-button" style="margin:0;font-size:0.9rem" onclick="acceptTrade(${tr.id})">ПРИНЯТЬ</button></div></div>`; });
-};
-window.closeIncomingTrades = () => document.getElementById('incomingTradesModal').classList.add('hidden');
-window.openCreateTrade = async () => { 
-    if (me.role !== 'Negotiator' && me.role !== 'leader') return;
-    document.getElementById('incomingTradesModal').classList.add('hidden'); document.getElementById('tradeModal').classList.remove('hidden'); const tSelect = document.getElementById('tradeTargetTeam'); const { data: teams } = await supabase.from('teams').select('id,name').neq('id', me.team_id); tSelect.innerHTML = teams.map(t => `<option value="${t.id}">${t.name}</option>`).join(''); const oSelect = document.getElementById('tradeOfferSelect'); oSelect.innerHTML = ''; Object.keys(currentTeam.inventory||{}).forEach(id => { if(currentTeam.inventory[id]>0) oSelect.innerHTML += `<option value="${id}">${GLOBAL_ITEMS[id]?.emoji} ${GLOBAL_ITEMS[id]?.name}</option>`; }); document.getElementById('tradeRequestSelect').innerHTML = Object.values(GLOBAL_ITEMS).map(i => `<option value="${i.id}">${i.emoji} ${i.name}</option>`).join(''); 
-};
-window.closeTradeModal = () => document.getElementById('tradeModal').classList.add('hidden');
-window.sendTradeRequest = async () => { const to = document.getElementById('tradeTargetTeam').value; const off = document.getElementById('tradeOfferSelect').value; const req = document.getElementById('tradeRequestSelect').value; if(!off || !req) return alert('Выберите предметы'); await supabase.from('trades').insert({from_team_id:me.team_id, to_team_id:to, offer_item_id:off, request_item_id:req}); alert('Отправлено!'); closeTradeModal(); };
-window.acceptTrade = async (id) => { const { error } = await supabase.rpc('accept_trade', { trade_id_input: id }); if(error) alert("Ошибка."); else { alert('Успешно!'); openIncomingTrades(); } };
-window.rejectTrade = async (id) => { await supabase.from('trades').update({status:'rejected'}).eq('id',id); openIncomingTrades(); };
-
-// ===== ПРОЧЕЕ =====
-window.toggleTask = async (taskId, checkboxEl) => {
-    if(hasShownGameOver) { alert('Конец игры'); checkboxEl.checked = false; return; }
-    if(me.role !== 'leader') { checkboxEl.checked = !checkboxEl.checked; alert('Только Лидер'); return; }
-    const task = currentTeam.tasks.find(t => t.id === taskId);
-    const inv = { ...currentTeam.inventory };
-    const isChecked = checkboxEl.checked;
-    if(task.type === 'requirement' && isChecked) {
-        if((inv[task.required_item_id] || 0) < 1) { alert('Нет предмета'); checkboxEl.checked = false; return; }
-        inv[task.required_item_id]--;
-    }
-    if(task.type === 'reward' && isChecked) { const rId = task.reward_item_id; inv[rId] = (inv[rId] || 0) + 1; alert(`Получено: ${GLOBAL_ITEMS[rId]?.name}`); }
-    const newTasks = currentTeam.tasks.map(t => t.id === taskId ? {...t, completed: isChecked} : t);
-    currentTeam.tasks = newTasks; currentTeam.inventory = inv; renderGameInterface(); 
-    await supabase.from('teams').update({ tasks: newTasks, inventory: inv }).eq('id', me.team_id);
-};
-async function renderMembers() {
-    const list = document.getElementById('currentTeamMembersList');
-    const { data: members } = await supabase.from('players').select('*').eq('team_id', me.team_id);
-    list.innerHTML = ''; document.getElementById('myTeamMembersCount').textContent = members ? members.length : 0;
-    if (members) members.forEach(m => { const kickBtn = (me.role === 'leader' && m.id !== me.id) ? `<button class="icon-btn" style="color:var(--accent-red); margin-left:auto;" onclick="kickPlayer('${m.id}', this)">✖</button>` : ''; list.innerHTML += `<li style="display:flex; align-items:center; width:100%;"><span>${m.name} ${m.role==='leader'?'👑':''}</span>${kickBtn}</li>`; });
-}
-window.kickPlayer = async (id, btn) => { if(!confirm('Исключить?')) return; if (btn) btn.closest('li').style.opacity = '0.3'; await supabase.from('players').delete().eq('id', id); refreshTeamData(); };
-window.openItemsGuide = () => { document.getElementById('itemsGuideModal').classList.remove('hidden'); document.querySelector('#itemsGuideModal tbody').innerHTML = Object.values(GLOBAL_ITEMS).map(i => `<tr class="guide-item-row"><td class="guide-icon">${i.emoji}</td><td class="guide-info"><h4>${i.name}</h4><p>${i.description||''}</p></td></tr>`).join(''); };
-window.closeItemsGuide = () => document.getElementById('itemsGuideModal').classList.add('hidden');
-
-async function checkGlobalGameState() {
-    const { data: teams } = await supabase.from('teams').select('*').order('updated_at', { ascending: true });
-    if (!teams) return;
-    const winners = teams.filter(t => t.tasks && t.tasks.length > 0 && t.tasks.every(task => task.completed));
-    const amIWinner = winners.some(w => w.id === me.team_id);
-    if (amIWinner && !hasShownVictory) { showVictoryModal(); return; }
-    if (!amIWinner && !hasShownGameOver) {
-        if (winners.length >= 2) {
-            const secondWinnerTime = new Date(winners[1].updated_at).getTime();
-            deadlineTimestamp = secondWinnerTime + (5 * 60 * 1000);
-            document.getElementById('lastChanceTimer').classList.remove('hidden');
-            if (!timerUiInterval) { timerUiInterval = setInterval(updateTimerUI, 1000); updateTimerUI(); }
-        } else document.getElementById('lastChanceTimer').classList.add('hidden');
-    }
-}
-
-// ==========================================
-// ===== НОВЫЕ РОЛИ: ЛОГИКА КНОПОК ======
-// ==========================================
-
-// 1. ШПИОН (Spy) — Разведка
-window.openSpyModal = async () => {
-    if (me.role !== 'Spy') return;
-    
-    // Простой кулдаун (локальный)
-    const lastSpy = localStorage.getItem('lastSpyTime');
-    const now = Date.now();
-    if(lastSpy && (now - lastSpy < 60000)) { // 1 минута
-        const left = Math.ceil((60000 - (now - lastSpy))/1000);
-        return alert(`⏳ Шпионская сеть перезагружается: ${left} сек.`);
-    }
-
-    const { data: teams } = await supabase.from('teams').select('id, name').neq('id', me.team_id);
-    
-    // Используем prompt для выбора цели
-    let promptText = "Введите ID команды для слежки:\n";
-    teams.forEach(t => promptText += `${t.id}: ${t.name}\n`);
-    
-    const targetId = prompt(promptText);
-    if(!targetId) return;
-
-    // Запрос данных
-    const { data: team, error } = await supabase.from('teams').select('inventory, frozen_until, name').eq('id', targetId).single();
-    
-    if(error || !team) return alert("❌ Не удалось получить данные. Возможно, неверный ID.");
-
-    localStorage.setItem('lastSpyTime', now); // Ставим кулдаун
-
-    // Формируем отчет
-    let invText = "Пусто";
-    if (team.inventory) {
-        invText = Object.keys(team.inventory).map(id => {
-            const count = team.inventory[id];
-            const item = GLOBAL_ITEMS[id];
-            return count > 0 ? `• ${item ? item.emoji + ' ' + item.name : '???'} (x${count})` : null;
-        }).filter(Boolean).join('\n');
-    }
-    if (!invText) invText = "Рюкзак пуст.";
-
-    const isFrozen = team.frozen_until && new Date(team.frozen_until) > new Date();
-    const status = isFrozen ? "❄️ ЗАМОРОЖЕНЫ" : "✅ АКТИВНЫ";
-
-    alert(`🕵️ ОТЧЕТ ПО ЦЕЛИ "${team.name}":\n\nСтатус: ${status}\n\n🎒 Инвентарь:\n${invText}`);
-};
-
-// 2. КЛАДОИСКАТЕЛЬ (Scavenger) — Поиск ресурсов
-window.scavengeSnow = async () => {
-    if (me.role !== 'Scavenger') return;
-
-    // Кулдаун 3 минуты
-    const lastDig = localStorage.getItem('lastDigTime');
-    const now = Date.now();
-    if(lastDig && (now - lastDig < 180000)) { 
-        const left = Math.ceil((180000 - (now - lastDig))/1000);
-        return alert(`⏳ Руки замерзли! Отогревайтесь еще ${left} сек.`);
-    }
-
-    if(navigator.vibrate) navigator.vibrate([50, 50, 50]);
-
-    const roll = Math.random();
-    let lootId = null;
-    let msg = "";
-
-    // Логика лута (Предполагаем ID: 1=Лед, 2=Снег, 3=Какао-бобы, 5=Ветка)
-    if (roll < 0.4) {
-        const commonItems = [1, 2, 5]; // ID обычных предметов
-        lootId = commonItems[Math.floor(Math.random() * commonItems.length)];
-        msg = "Вы раскопали сугроб и нашли ресурс!";
-    } else if (roll < 0.6) {
-        msg = "Ничего... только грязный снег.";
-    } else {
-        msg = "Вы нашли старый фантик. Бесполезно.";
-    }
-
-    localStorage.setItem('lastDigTime', now);
-
-    if (lootId) {
-        const item = GLOBAL_ITEMS[lootId] || { name: 'Неизвестно', emoji: '❓' };
-        const newInv = { ...currentTeam.inventory };
-        newInv[lootId] = (newInv[lootId] || 0) + 1;
-        
-        await supabase.from('teams').update({ inventory: newInv }).eq('id', me.team_id);
-        alert(`🎉 ${msg}\nПолучено: ${item.emoji} ${item.name}`);
-    } else {
-        alert(`💨 ${msg}`);
-    }
-};
-
-// 3. ХРАНИТЕЛЬ (Guardian) — Согрев
-window.guardianWarmUp = async () => {
-    if (me.role !== 'Guardian') return;
-    
-    if (!currentTeam.frozen_until || new Date(currentTeam.frozen_until) < new Date()) {
-        return alert("🔥 Ваша команда не заморожена! Тепло хранить не нужно.");
-    }
-
-    // Кулдаун
-    const lastWarm = localStorage.getItem('lastWarmTime');
-    const now = Date.now();
-    if(lastWarm && (now - lastWarm < 30000)) { // 30 сек
-         const left = Math.ceil((30000 - (now - lastWarm))/1000);
-         return alert(`⏳ Магия огня восстанавливается: ${left} сек.`);
-    }
-
-    // Снимаем 30 секунд заморозки
-    const currentFreeze = new Date(currentTeam.frozen_until).getTime();
-    const newFreezeTime = new Date(currentFreeze - 30000); // Минус 30 сек
-    
-    if (newFreezeTime < new Date()) {
-        await supabase.from('teams').update({ frozen_until: null }).eq('id', me.team_id);
-        alert("🔥 ВЫ РАЗМОРОЗИЛИ КОМАНДУ ПОЛНОСТЬЮ!");
-    } else {
-        await supabase.from('teams').update({ frozen_until: newFreezeTime.toISOString() }).eq('id', me.team_id);
-        alert("🔥 ТЕПЛО! Время заморозки сокращено на 30 секунд.");
-    }
-    
-    localStorage.setItem('lastWarmTime', now);
-    if(navigator.vibrate) navigator.vibrate(200);
-};
-
-initGame();
+// Start Game
+initGame().catch(console.error);

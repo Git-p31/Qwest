@@ -1,27 +1,18 @@
-/* main.css — Christmas Market Theme (Final & Mobile Adapted) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
 
 :root {
-  --bg-deep: #0f1820; /* Глубокий зимний ночной цвет */
-  --card-bg: rgba(20, 30, 45, 0.95); /* Темно-синий фон карточек */
-  --glass-border: rgba(255, 215, 0, 0.3); /* Золотистая обводка */
-  
-  --text-main: #FFF8E7; /* Теплый белый */
+  --bg-deep: #0f1820;
+  --card-bg: rgba(20, 30, 45, 0.95);
+  --glass-border: rgba(255, 215, 0, 0.3);
+  --text-main: #FFF8E7;
   --text-muted: #A0B0C0;
-  
-  /* Праздничная палитра */
-  --accent-gold: #FFD700;       /* Золото */
-  --accent-red: #FF3333;        /* Красный */
-  --accent-green: #00D68F;      /* Хвоя */
-  --accent-ice: #00FFFF;        /* Лед (для заморозки) */
-  --accent-pine: #2D5A40;       
-  
-  /* Градиент кнопок: Праздничный красно-золотой */
+  --accent-gold: #FFD700;
+  --accent-red: #FF3333;
+  --accent-green: #00D68F;
+  --accent-ice: #00FFFF;
   --gradient-btn: linear-gradient(135deg, #D90026 0%, #FF8C00 100%);
-  
-  /* Полоски для "шатров" (Ярмарочный стиль) */
   --stripe-color-1: #D90026; 
   --stripe-color-2: #620818;
-  
   --font-main: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
@@ -30,432 +21,217 @@
 html, body {
   height: 100%; margin: 0; padding: 0;
   color: var(--text-main);
-  background: linear-gradient(rgba(5, 10, 20, 0.85), rgba(5, 10, 20, 0.9)), url('image.png'); 
+  background: linear-gradient(rgba(5, 10, 20, 0.85), rgba(5, 10, 20, 0.9)), url('image.png');
   background-position: center; background-size: cover; background-attachment: fixed; 
+  background-color: var(--bg-deep);
   overflow-x: hidden;
-}
-
-/* === КАНВАСЫ (Фон и Эффекты) === */
-
-/* Снег (фоновый, постоянный) */
-canvas#snowCanvas { 
-    position: fixed; left: 0; top: 0; 
-    pointer-events: none; z-index: 1; opacity: 0.8; 
-}
-
-/* Падающие ледяные осколки (только при заморозке) */
-canvas#iceFallCanvas {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    pointer-events: none; 
-    z-index: 9100; /* Чуть выше статического льда */
 }
 
 .hidden { display: none !important; }
 .muted { opacity: 0.7; font-size: 0.9em; font-style: italic; color: var(--text-muted); }
 
-/* === ТАЙМЕР (Гирлянда опасности) === */
-#lastChanceTimer {
-    position: fixed; top: 0; left: 0; width: 100%; height: 55px;
-    background: repeating-linear-gradient(45deg, #cc0000, #cc0000 20px, #990000 20px, #990000 40px);
-    color: white; font-weight: 900; font-size: 1.1rem; text-transform: uppercase;
-    display: flex; justify-content: center; align-items: center; gap: 10px;
-    z-index: 15000; box-shadow: 0 5px 20px rgba(0,0,0,0.7);
-    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-    animation: slideDown 0.5s ease-out;
-    border-bottom: 3px solid var(--accent-gold);
-}
-@keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+/* VFX */
+canvas { pointer-events: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+canvas#snowCanvas { z-index: 1; opacity: 0.8; }
+canvas#iceFallCanvas { z-index: 9100; }
 
-/* === LAYOUT === */
+/* UI Layout */
+#lastChanceTimer {
+    position: fixed; top: 0; left: 0; width: 100%; height: 50px;
+    background: repeating-linear-gradient(45deg, #cc0000, #cc0000 20px, #990000 20px, #990000 40px);
+    color: white; font-weight: 900; font-size: 1.1rem; display: flex; justify-content: center; align-items: center; gap: 10px;
+    z-index: 15000; border-bottom: 3px solid var(--accent-gold);
+}
+
 .game-wrap { 
-    padding: 15px; max-width: 1000px; margin: 0 auto; 
-    padding-top: 75px; min-height: 100vh; display: flex; flex-direction: column; z-index: 5;
-    padding-bottom: 40px; 
+    padding: 10px; max-width: 1200px; margin: 0 auto; 
+    padding-top: 60px; min-height: 100vh; display: flex; flex-direction: column; gap: 15px; z-index: 5;
+    position: relative;
 }
 
 .game-header { 
     display: flex; justify-content: space-between; align-items: center; 
-    padding: 12px 15px; background: rgba(20, 30, 40, 0.9); 
-    border: 1px solid var(--glass-border); border-radius: 16px; margin-bottom: 15px; 
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    padding: 10px 15px; background: rgba(20, 30, 40, 0.95); 
+    border: 1px solid var(--glass-border); border-radius: 16px;
 }
-.header-left { display: flex; align-items: center; gap: 12px; }
-.avatar-circle { 
-    width: 44px; height: 44px; background: #333; border-radius: 50%; 
-    border: 2px solid var(--accent-gold); background-size: cover; 
-    box-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
-}
-.player-name-header { font-weight: 800; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.5px; text-shadow: 0 0 10px rgba(255,255,255,0.3); }
-
-.icon-btn { background: none; border: none; font-size: 1.6rem; cursor: pointer; padding: 5px; transition: transform 0.2s; filter: drop-shadow(0 0 5px rgba(255,215,0,0.5)); }
+.header-left, .header-right { display: flex; align-items: center; gap: 10px; }
+.avatar-circle { width: 40px; height: 40px; background: #333; border-radius: 50%; border: 2px solid var(--accent-gold); background-size: cover; }
+.player-name-header { font-weight: 800; text-transform: uppercase; font-size: 0.9rem; }
+.icon-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 1.4rem; cursor: pointer; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
 .icon-btn:active { transform: scale(0.9); }
 
 .game-main { display: flex; flex-direction: column; gap: 15px; flex-grow: 1; }
-
-/* === КАРТОЧКИ (Лавки Ярмарки) === */
-.card {
-    background: var(--card-bg); 
-    border: 1px solid var(--glass-border);
-    border-radius: 20px; padding: 20px; 
-    box-shadow: 0 15px 40px rgba(0,0,0,0.6);
-    position: relative; overflow: hidden;
+@media (min-width: 900px) {
+    .game-main { display: grid; grid-template-columns: 280px 1fr 300px; align-items: start; }
+    .game-wrap { height: 100vh; overflow: hidden; }
+    .inventory-panel, .tasks-panel, .team-info-panel, .map-wrapper { max-height: 85vh; overflow-y: auto; }
 }
 
-/* Полосатая крыша (Навес) */
+.card {
+    background: var(--card-bg); border: 1px solid var(--glass-border);
+    border-radius: 16px; padding: 15px; position: relative; overflow: hidden; display: flex; flex-direction: column;
+}
 .card::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 12px;
-    background: repeating-linear-gradient(
-        -45deg, 
-        var(--stripe-color-1), 
-        var(--stripe-color-1) 15px, 
-        var(--stripe-color-2) 15px, 
-        var(--stripe-color-2) 30px
-    );
-    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 8px;
+    background: repeating-linear-gradient(-45deg, var(--stripe-color-1), var(--stripe-color-1) 10px, var(--stripe-color-2) 10px, var(--stripe-color-2) 20px);
     z-index: 2;
 }
+h2 { color: var(--accent-gold); margin: 5px 0 15px 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; }
 
-h2 { 
-    color: var(--accent-gold); margin: 5px 0 15px 0; 
-    font-weight: 900; font-size: 1.3rem; text-transform: uppercase; 
-    text-shadow: 0 0 15px rgba(255, 215, 0, 0.4); 
-    letter-spacing: 1px;
+/* Inventory & Lists */
+.inventory-list { list-style: none; padding: 0; margin: 0; }
+.inventory-list li { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); gap: 10px; }
+.inv-count { background: var(--accent-gold); color: #000; font-weight: bold; font-size: 0.8rem; padding: 2px 8px; border-radius: 10px; }
+
+/* === MAP === */
+.leaflet-container { background: #0f1820 !important; font-family: var(--font-main); z-index: 1; }
+.map-wrapper { height: 500px; min-height: 400px; padding: 0 !important; position: relative; z-index: 1; border-radius: 20px; overflow: hidden; border: 2px solid var(--glass-border); }
+#interactiveMap { width: 100%; height: 100%; }
+
+.custom-leaflet-icon { background: none; border: none; }
+.marker { display: flex; flex-direction: column; align-items: center; cursor: pointer; }
+.marker:hover .pin { transform: scale(1.15) translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.7); }
+.marker:hover { z-index: 10000 !important; }
+
+.marker .pin {
+    width: 32px; height: 32px; border-radius: 50% 50% 50% 0; 
+    transform: rotate(-45deg); display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; box-shadow: 0 5px 15px rgba(0,0,0,0.5); border: 2px solid #fff; background: #444; 
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
+.marker .pin > div { transform: rotate(45deg); line-height: 1; pointer-events: none; }
 
-/* === ИНВЕНТАРЬ (Списки) === */
-.inventory-list li { 
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.1);
+.marker.tent .pin { background: #ffd166; border-color: #fff8e0; color: #403000; }
+.marker.npc .pin { background: #6ee7b7; border-color: #e0fff4; color: #003322; }
+.marker.team .pin { background: #93c5fd; border-color: #e0f0ff; color: #002244; }
+.marker.me .pin { background: #fb7185; border-color: #ffe0e6; color: #441111; animation: pulse-me 2s infinite; }
+@keyframes pulse-me { 0% { box-shadow: 0 0 0 0 rgba(251, 113, 133, 0.7); } 100% { box-shadow: 0 0 0 15px rgba(251, 113, 133, 0); } }
+
+.marker .label { background: rgba(0, 0, 0, 0.85); color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; margin-top: 8px; white-space: nowrap; backdrop-filter: blur(4px); pointer-events: none; border: 1px solid rgba(255,255,255,0.1); }
+
+.locate-btn { position: absolute; right: 15px; bottom: 25px; z-index: 500; background: var(--bg-deep); color: var(--accent-gold); padding: 10px 15px; border-radius: 50px; border: 1px solid var(--accent-gold); cursor: pointer; font-weight: bold; }
+.map-legend { position: absolute; left: 15px; bottom: 25px; z-index: 500; background: rgba(15, 20, 30, 0.9); color: #fff; padding: 12px; border-radius: 12px; font-size: 0.8rem; backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.15); }
+.map-legend > div { margin-bottom: 6px; display: flex; align-items: center; }
+.map-legend .mark { width: 10px; height: 10px; margin-right: 8px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.3); }
+.map-legend .tent { background: #ffd166; } .map-legend .npc { background: #6ee7b7; } .map-legend .team { background: #93c5fd; } .map-legend .me { background: #fb7185; }
+
+/* Modals */
+.modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); z-index: 9999; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+.modal-content { width: 90%; max-width: 450px; background: #1a1a24; border-radius: 20px; padding: 25px; position: relative; border: 1px solid var(--glass-border); max-height: 90vh; overflow-y: auto; }
+.modal-header-strip { position: absolute; top: 0; left: 0; right: 0; height: 6px; background: repeating-linear-gradient(90deg, var(--accent-gold), var(--accent-gold) 20px, #b8860b 20px, #b8860b 40px); }
+.modal-title { color: var(--accent-gold); margin: 0; font-size: 1.2rem; }
+.modal-close { background: none; border: none; color: #fff; font-size: 2rem; cursor: pointer; line-height: 1; }
+.modal-top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; margin-top: 5px; }
+.modal-input { width: 100%; padding: 12px; background: #0f1218; border: 1px solid #333; border-radius: 8px; color: #fff; margin-bottom: 10px; font-size: 1rem; }
+.label-accent { display: block; color: var(--accent-gold); font-size: 0.8rem; margin: 15px 0 5px 0; font-weight: bold; text-transform: uppercase; }
+.start-button { width: 100%; padding: 15px; border-radius: 50px; font-weight: 900; text-transform: uppercase; background: var(--gradient-btn); color: #fff; border: none; cursor: pointer; margin-top: 20px; font-size: 1rem; }
+button.secondary { background: transparent; border: 1px solid #555; color: #ccc; padding: 8px 15px; border-radius: 8px; cursor: pointer; }
+
+/* VFX Overlays */
+.ice-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 9000; background: radial-gradient(circle, transparent 40%, rgba(0, 255, 255, 0.3) 90%); box-shadow: inset 0 0 100px rgba(0, 255, 255, 0.5); opacity: 0; transition: opacity 0.5s; }
+.ice-overlay.smash { animation: iceSmash 0.5s forwards; opacity: 1; }
+@keyframes iceSmash { 0% { transform: scale(1.5); opacity:0; } 100% { transform: scale(1); opacity:1; } }
+.fire-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 10000; background: radial-gradient(circle, transparent 20%, rgba(255, 85, 0, 0.4) 80%); mix-blend-mode: screen; opacity: 0; }
+.fire-overlay.boom { animation: fireBoom 1s ease-out forwards; }
+@keyframes fireBoom { 0% { opacity:0; transform:scale(0.8); } 50% { opacity:1; transform:scale(1.1); } 100% { opacity:0; transform:scale(1.5); } }
+.body-shake { animation: shake 0.5s ease-in-out; }
+@keyframes shake { 0%, 100% { transform: translate(0); } 25% { transform: translate(-5px, 5px); } 75% { transform: translate(5px, -5px); } }
+.cocoa-overlay { position: fixed; inset: 0; z-index: 12000; pointer-events: none; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+.cocoa-wrapper { position: absolute; display: flex; justify-content: center; align-items: center; animation: floatUp ease-in forwards; }
+.cocoa-shape { width: 100%; height: 100%; background: #5D4037; opacity: 0.8; animation: spin linear infinite; }
+@keyframes floatUp { 0% { transform: translateY(100vh) scale(0.5); opacity: 1; } 100% { transform: translateY(-10vh) scale(1.2); opacity: 0; } }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+/* Logic Overrides */
+body.frozen-mode .map-wrapper, body.frozen-mode .tasks-panel, body.frozen-mode .team-info-panel, body.frozen-mode .header-right > button:not(#btnGuardianWarm) { filter: grayscale(1) blur(2px); opacity: 0.6; pointer-events: none; }
+body.frozen-mode #btnGuardianWarm { pointer-events: auto !important; opacity: 1 !important; filter: none !important; animation: pulse-red 1s infinite; border: 2px solid var(--accent-red); box-shadow: 0 0 20px var(--accent-red); }
+@keyframes pulse-red { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
+.craft-recipe { background: rgba(255,255,255,0.05); padding: 10px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #333; }
+.ingredient.missing { opacity: 0.3; filter: grayscale(1); }
+.craft-result { font-size: 2rem; background: rgba(255,215,0,0.1); padding: 10px; border-radius: 50%; border: 1px solid var(--accent-gold); }
+.btn-use { background: var(--accent-gold); border: none; border-radius: 4px; font-weight: bold; cursor: pointer; padding: 4px 8px; font-size: 0.7rem; }
+.pulse-gold { animation: pulse-gold-anim 2s infinite; border-color: var(--accent-gold); }
+@keyframes pulse-gold-anim { 0% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 215, 0, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); } }
+
+/* === CRAFTING UI (FIXED) === */
+.craft-recipe {
+    background: rgba(25, 35, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
     gap: 10px;
 }
-.inventory-list li:last-child { border-bottom: none; }
 
-.inv-count { 
-    background: var(--accent-gold); color: #400000; 
-    font-weight: 800; font-size: 0.85rem; padding: 3px 10px; border-radius: 12px; 
-    box-shadow: 0 2px 5px rgba(0,0,0,0.3); white-space: nowrap;
+.recipe-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    padding-bottom: 8px;
+    margin-bottom: 5px;
 }
 
-/* === КАРТА === */
-.map-placeholder {
-    width: 100%; min-height: 250px;
-    background: rgba(0,0,0,0.3); border-radius: 16px;
-    display: flex; align-items: center; justify-content: center;
-    border: 2px dashed rgba(255,255,255,0.1);
-    overflow: hidden; position: relative;
-}
-.map-placeholder img { transition: transform 0.5s ease; }
-.map-placeholder:hover img { transform: scale(1.05); }
-
-/* === ТАБЛИЦА ЗАДАЧ === */
-.tasks-table { width: 100%; border-collapse: collapse; }
-.tasks-table th { text-align: left; color: var(--accent-green); font-size: 0.75rem; text-transform: uppercase; opacity: 0.8; padding-bottom: 10px; letter-spacing: 1px; }
-.tasks-table td { padding: 14px 6px; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 0.95rem; vertical-align: middle; line-height: 1.4; }
-.task-row.locked td { color: var(--accent-red); opacity: 0.6; }
-.task-row.ready td { color: var(--accent-green); font-weight: bold; text-shadow: 0 0 10px rgba(0, 214, 143, 0.3); }
-
-/* Кастомный чекбокс */
-.task-check-input { 
-    width: 24px; height: 24px; accent-color: var(--accent-gold); cursor: pointer; 
-    margin: 0 auto; display: block;
+.recipe-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: rgba(0,0,0,0.2);
+    padding: 10px;
+    border-radius: 8px;
 }
 
-/* === МОДАЛКИ (Зимний стиль) === */
-.modal-backdrop {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(5, 10, 15, 0.95); z-index: 9999;
-    display: flex; justify-content: center; align-items: center;
-    backdrop-filter: blur(10px);
+.ingredients-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
-.modal-content {
-    width: 95%; max-width: 420px;
-    background: #1A0F24; 
-    border-radius: 24px; padding: 25px; position: relative;
-    box-shadow: 0 0 50px rgba(217, 0, 38, 0.2);
-    border: 2px solid var(--glass-border); text-align: left;
-    max-height: 90vh; overflow-y: auto; 
-}
-
-.modal-header-strip {
-    position: absolute; top: 0; left: 0; right: 0; height: 10px;
-    background: repeating-linear-gradient(90deg, var(--accent-gold), var(--accent-gold) 20px, #b8860b 20px, #b8860b 40px);
-    border-radius: 22px 22px 0 0;
-}
-
-.modal-top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; margin-top: 10px; }
-.modal-title { font-size: 1.4rem; font-weight: 900; text-transform: uppercase; color: var(--accent-gold); margin: 0; display: flex; align-items: center; gap: 10px; }
-.modal-close { background: none; border: none; color: #fff; font-size: 2.2rem; cursor: pointer; line-height: 1; padding: 0 10px; opacity: 0.8; }
-
-/* Справочник предметов */
-.guide-item-row { display: flex; align-items: flex-start; gap: 15px; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
-.guide-icon { font-size: 2.2rem; min-width: 50px; text-align: center; filter: drop-shadow(0 0 5px rgba(255,255,255,0.3)); padding-top: 5px; }
-.guide-info h4 { margin: 0; color: var(--accent-gold); font-size: 1.1rem; }
-.guide-info p { margin: 4px 0 0 0; color: var(--text-muted); font-size: 0.9rem; font-style: italic; line-height: 1.4; }
-
-/* Кнопки и Формы */
-.btn-create-big {
-    width: 100%; padding: 18px; border-radius: 50px; border: none;
-    background: var(--gradient-btn);
-    color: #fff; font-size: 1.1rem; font-weight: 900; text-transform: uppercase;
-    box-shadow: 0 8px 25px rgba(217, 0, 38, 0.5);
-    cursor: pointer; margin-bottom: 20px; display: flex; justify-content: center; align-items: center; gap: 10px;
-    transition: transform 0.2s;
-}
-.btn-create-big:active { transform: scale(0.96); }
-
-.trade-card { 
-    background: rgba(255,255,255,0.03); border-radius: 16px; padding: 18px; 
-    margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.15); 
-}
-.trade-actions { display: flex; gap: 10px; margin-top: 15px; flex-direction: column; }
-@media (min-width: 400px) {
-    .trade-actions { flex-direction: row; justify-content: flex-end; }
-    .trade-actions button { width: auto; flex: 1; }
-}
-
-.label-accent { display: block; margin-top: 20px; font-size: 0.8rem; font-weight: bold; color: var(--accent-gold); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
-.modal-input {
-    width: 100%; padding: 16px; background: rgba(0,0,0,0.4);
-    border: 1px solid rgba(255,255,255,0.2); border-radius: 14px;
-    color: #fff; font-size: 1.1rem; margin-bottom: 5px; appearance: none;
-}
-.modal-input:focus { border-color: var(--accent-gold); box-shadow: 0 0 15px rgba(255, 215, 0, 0.2); }
-
-.start-button { 
-    width: 100%; padding: 16px; border-radius: 50px; 
-    font-weight: 900; text-transform: uppercase; 
-    background: var(--gradient-btn); color: #fff; border: none; 
-    cursor: pointer; margin-top: 25px; 
-    box-shadow: 0 5px 20px rgba(0,0,0,0.4); font-size: 1rem;
-}
-
-button.secondary { 
-    background: rgba(255,255,255,0.05); color: #ccc; 
-    border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; 
-    padding: 12px; font-size: 0.9rem; cursor: pointer; text-transform: uppercase; font-weight: 600;
-}
-
-/* === СПЕЦЭФФЕКТЫ (Freeze, Shield) === */
-.item-freeze {
-    border: 1px solid var(--accent-ice) !important;
-    box-shadow: 0 0 15px rgba(0, 255, 255, 0.2) inset;
-}
-.pulse-gold { animation: goldPulse 2s infinite alternate; border-color: var(--accent-gold) !important; box-shadow: 0 0 15px rgba(255, 215, 0, 0.5) !important; }
-.pulse-green { border-color: var(--accent-green) !important; box-shadow: 0 0 40px var(--accent-green) !important; }
-.pulse-red { border-color: var(--accent-red) !important; box-shadow: 0 0 40px var(--accent-red) !important; }
-
-@keyframes goldPulse { 0% { box-shadow: 0 0 10px var(--accent-gold); } 100% { box-shadow: 0 0 30px var(--accent-gold); } }
-
-/* === МОБИЛЬНАЯ АДАПТАЦИЯ === */
-@media (max-width: 800px) {
-    .inventory-list { display: flex; flex-wrap: wrap; gap: 8px; }
-    .inventory-list li {
-        border: 1px solid rgba(255,255,255,0.1);
-        background: rgba(0,0,0,0.2);
-        border-radius: 12px;
-        padding: 10px;
-        flex: 1 1 45%; 
-        margin-bottom: 0;
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    .inventory-list li > div { width: 100%; margin-bottom: 5px; }
-    .inventory-list li.muted { flex: 1 1 100%; text-align: center; border:none; background:none; }
-    .inv-count { align-self: flex-end; }
-    .game-title { font-size: 1.5rem; }
-    .btn-create-big { font-size: 1rem; padding: 14px; }
-}
-
-@media (min-width: 801px) {
-    .game-main { display: grid; grid-template-columns: 320px 1fr; grid-template-rows: auto 1fr; gap: 20px; }
-    .inventory-panel { grid-column: 1; grid-row: 1 / 3; }
-    .bottom-panel { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; }
-    .card:hover { transform: translateY(-2px); transition: transform 0.3s ease; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
-}
-
-/* ========================================= */
-/* === VFX ZONE: ЭФФЕКТЫ (ЛЕД, ОГОНЬ, ГРЯЗЬ) === */
-/* ========================================= */
-
-/* 1. ВЗРЫВ ОГНЯ (При разморозке) */
-.fire-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    pointer-events: none; z-index: 10000;
-    mix-blend-mode: screen;
-    opacity: 0;
-}
-
-.fire-overlay.boom {
-    animation: fireBoom 1.2s ease-out forwards;
-}
-
-@keyframes fireBoom {
-    0% { opacity: 0; transform: scale(0.5); background: radial-gradient(circle, #fff 0%, #ffaa00 20%, transparent 50%); }
-    10% { opacity: 1; transform: scale(1.2); background: radial-gradient(circle, #fff 10%, #ff5500 40%, transparent 70%); }
-    40% { opacity: 0.8; transform: scale(1.5); background: radial-gradient(circle, #ffaa00 0%, #ff0000 60%, transparent 80%); filter: blur(5px); }
-    100% { opacity: 0; transform: scale(2); filter: blur(20px); }
-}
-
-/* 2. СЛОЙ ЛЬДА (С текстурой трещин) */
-.ice-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: radial-gradient(circle, transparent 40%, rgba(139, 233, 253, 0.4) 90%),
-                url('https://www.transparenttextures.com/patterns/cracked-glass.png'); /* Текстура трещин */
-    box-shadow: inset 0 0 100px rgba(139, 233, 253, 0.8);
-    pointer-events: none;
-    z-index: 9000;
-    animation: pulseIce 5s infinite alternate;
-}
-
-.ice-overlay.smash {
-    animation: iceSmash 0.5s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
-}
-
-@keyframes pulseIce { 0% { opacity: 0.6; } 100% { opacity: 0.9; } }
-
-@keyframes iceSmash {
-    0% { opacity: 0; transform: scale(2); filter: brightness(5); } 
-    20% { opacity: 1; transform: scale(0.9); filter: brightness(1); } 
-    40% { transform: scale(1.05); }
-    100% { transform: scale(1); }
-}
-
-/* 3. ТРЯСКА ЭКРАНА */
-.body-shake { animation: shakeHard 0.5s ease-in-out; }
-
-@keyframes shakeHard {
-    0% { transform: translate(0, 0) rotate(0deg); }
-    10% { transform: translate(-10px, -10px) rotate(-1deg); filter: blur(2px); }
-    20% { transform: translate(10px, 10px) rotate(1deg); filter: hue-rotate(180deg); }
-    30% { transform: translate(-10px, 10px) rotate(0deg); filter: blur(0); }
-    40% { transform: translate(10px, -10px) rotate(1deg); }
-    50% { transform: translate(0, 0) rotate(0deg); }
-}
-
-/* 4. ЭФФЕКТ ГРЯЗИ / КАКАО (FINAL PHYSICS FIX) */
-
-.cocoa-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    pointer-events: none; 
-    z-index: 99999; /* Поверх всего */
-    overflow: hidden;
-}
-
-/* Контейнер для падения (только гравитация) */
-.cocoa-wrapper {
-    position: absolute;
-    animation: gravityFall 4s ease-in 0.4s forwards;
-}
-
-/* Сама клякса (форма и шлепок) */
-.cocoa-shape {
-    width: 100%; height: 100%;
-    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.2) 0%, transparent 25%),
-                radial-gradient(circle at 50% 50%, #5D4037 0%, #3E2723 60%, #1a0e0c 100%);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-    transform: scale(0);
-    opacity: 0.95;
-    animation: splatAppear 0.3s cubic-bezier(0.15, 1.8, 0.5, 1) forwards;
-}
-
-/* Хвост (стекающая капля) */
-.cocoa-shape::after {
-    content: ''; position: absolute; z-index: -1;
-    top: 50%; left: 50%; width: 40%; height: 0;
-    background: inherit;
-    border-radius: 0 0 20px 20px;
-    transform: translateX(-50%);
-    animation: growTail 3.5s ease-in 0.4s forwards;
-}
-
-@keyframes splatAppear {
-    0% { transform: scale(0); }
-    100% { transform: scale(1); }
-}
-
-@keyframes gravityFall {
-    0% { transform: translateY(0); }
-    100% { transform: translateY(80vh); opacity: 0; }
-}
-
-@keyframes growTail {
-    0% { height: 0; opacity: 1; }
-    100% { height: 200px; width: 10%; opacity: 0.5; }
-}
-
-/* === КНОПКА USE === */
-.btn-use {
-    background: var(--accent-gold); color: #000; border: none;
-    padding: 6px 14px; border-radius: 20px; font-weight: 900;
-    font-size: 0.75rem; cursor: pointer; text-transform: uppercase;
-    box-shadow: 0 2px 10px rgba(255, 215, 0, 0.3);
-    margin-left: auto; 
-}
-.btn-use:active { transform: scale(0.95); }
-
-/* === РЕЖИМ ЗАМОРОЗКИ (FROZEN MODE) === */
-/* Блокируем всё, КРОМЕ инвентаря */
-body.frozen-mode .map-window,
-body.frozen-mode .tasks-panel,
-body.frozen-mode .team-info-panel {
-    filter: grayscale(1) blur(4px);
-    opacity: 0.5;
-    pointer-events: none; 
-}
-
-/* ВАЖНОЕ ИСПРАВЛЕНИЕ ДЛЯ ХРАНИТЕЛЯ:
-   Блокируем только кнопки в шапке, КРОМЕ кнопки "Огонь" (#btnGuardianWarm).
-   Если заблокировать всю .header-right, Хранитель не сможет разморозить команду!
-*/
-body.frozen-mode .header-right > button:not(#btnGuardianWarm) {
-    filter: grayscale(1) blur(4px);
-    opacity: 0.5;
-    pointer-events: none;
-}
-
-/* Кнопка Хранителя должна быть доступна и "гореть надеждой" */
-body.frozen-mode #btnGuardianWarm {
-    pointer-events: auto;
-    cursor: pointer;
-    animation: pulse-red 1s infinite alternate;
-    box-shadow: 0 0 20px var(--accent-red);
-    border: 1px solid var(--accent-red);
-}
-
-/* Инвентарь должен быть доступен (спасение) */
-body.frozen-mode .inventory-panel {
+.ingredient-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 5px;
+    min-width: 50px;
     position: relative;
-    z-index: 9500; 
-    box-shadow: 0 0 50px var(--accent-gold); 
-    border-color: var(--accent-gold);
-    animation: shakeInv 0.5s ease-in-out;
-    background: rgba(20, 30, 45, 1);
 }
 
-@keyframes shakeInv { 
-    0%, 100% { transform: translateX(0); } 
-    25% { transform: translateX(-5px); } 
-    75% { transform: translateX(5px); } 
+.ingredient-box.has-it { border-color: var(--accent-green); background: rgba(0, 214, 143, 0.1); }
+.ingredient-box.missing { border-color: var(--accent-red); opacity: 0.6; }
+
+.ing-icon { font-size: 1.5rem; }
+.ing-count { font-size: 0.75rem; font-weight: bold; margin-top: 2px; }
+
+.arrow-sign { font-size: 1.2rem; color: #666; font-weight: bold; }
+
+.craft-result {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 60px;
+    height: 60px;
+    background: radial-gradient(circle, rgba(255,215,0,0.2) 0%, transparent 70%);
+    border: 1px solid var(--accent-gold);
+    border-radius: 50%;
+    font-size: 2rem;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);
 }
 
-/* === РЕДКОСТЬ ПРЕДМЕТОВ И КРАФТ === */
-.rarity-common { border-left: 4px solid #A0B0C0 !important; }
-.rarity-rare { border-left: 4px solid #3b82f6 !important; box-shadow: inset 5px 0 10px rgba(59, 130, 246, 0.1); }
-.rarity-epic { border-left: 4px solid #a855f7 !important; box-shadow: inset 5px 0 10px rgba(168, 85, 247, 0.15); }
-.rarity-legendary { border-left: 4px solid #eab308 !important; box-shadow: inset 5px 0 15px rgba(234, 179, 8, 0.2); }
-
-.craft-recipe {
-    background: rgba(0,0,0,0.3);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 12px; padding: 15px; margin-bottom: 15px;
+/* === TENT WAITING ANIMATION === */
+.tent-waiting {
+    text-align: center;
+    padding: 20px;
 }
-.recipe-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
-
-.craft-result { 
-    transform: scale(1.1); 
-    border: 2px solid var(--accent-gold); 
-    padding: 8px; border-radius: 12px; 
-    background: rgba(255,215,0,0.1); 
-    box-shadow: 0 0 15px rgba(255,215,0,0.2);
+.loader-spinner {
+    width: 40px; height: 40px; border: 4px solid #fff;
+    border-top-color: var(--accent-gold); border-radius: 50%;
+    margin: 0 auto 15px auto;
+    animation: spin 1s linear infinite;
 }
+@keyframes spin { 100% { transform: rotate(360deg); } }

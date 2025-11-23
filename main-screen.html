@@ -3,18 +3,21 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
-    <title>Stuttgart Talks: Game</title>
-    <link rel="stylesheet" href="main.css" />
+    <title>Stuttgart Christmas Game</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="main.css" />
 </head>
 <body class="game-body">
+    
     <canvas id="snowCanvas"></canvas>
     <canvas id="iceFallCanvas" class="hidden"></canvas>
-
     <div id="iceOverlay" class="ice-overlay hidden"></div>
     <div id="fireOverlay" class="fire-overlay hidden"></div>
     <div id="cocoaOverlay" class="cocoa-overlay hidden"></div>
-
+    
     <audio id="lavaAudio" src="minecraft-drinking-sound-effect.mp3" preload="auto"></audio>
 
     <div id="lastChanceTimer" class="hidden">
@@ -23,39 +26,51 @@
     </div>
 
     <div class="game-wrap">
+        
         <header class="game-header">
             <div class="header-left">
                 <div class="avatar-circle" id="myTeamAvatar"></div>
                 <div>
-                    <span id="myNameHeader" class="player-name-header">...</span>
+                    <span id="myNameHeader" class="player-name-header">Загрузка...</span>
                     <div style="font-size: 0.8rem; opacity: 0.9;">
                         <strong id="myTeamName">...</strong> • <span id="myPlayerRole">...</span>
                     </div>
                 </div>
             </div>
             <div class="header-right">
-                <button class="icon-btn" onclick="openItemsGuide()">📖</button>
-                <button class="icon-btn" onclick="openCraftModal()" style="color: #d946ef;">⚒️</button>
-                <button id="btnShowTrades" class="secondary hidden" onclick="openIncomingTrades()">Обмен 🤝</button>
-                <button id="btnLogout" class="icon-btn" style="color:var(--accent-red)">🚪</button>
-                <button id="btnSpyAction" class="icon-btn hidden" onclick="openSpyModal()">🕵️‍♂️</button>
-                <button id="btnScavenge" class="icon-btn hidden" onclick="scavengeSnow()">🧤</button>
-                <button id="btnGuardianWarm" class="icon-btn hidden" onclick="guardianWarmUp()">🔥</button>
+                <button class="icon-btn" onclick="window.openItemsGuide()" title="Справочник">📖</button>
+                <button class="icon-btn" onclick="window.openCraftModal()" style="color: #d946ef;" title="Крафт">⚒️</button>
+                
+                <button id="btnShowTrades" class="secondary hidden" style="display:none !important;" onclick="window.openIncomingTrades()">Обмен 🤝</button>
+                
+                <button id="btnLogout" class="icon-btn" style="color:var(--accent-red)" title="Выход">🚪</button>
+                
+                <button id="btnSpyAction" class="icon-btn hidden" onclick="window.openSpyModal()" title="Шпионаж">🕵️‍♂️</button>
+                <button id="btnScavenge" class="icon-btn hidden" onclick="window.scavengeSnow()" title="Искать в снегу">🧤</button>
+                <button id="btnGuardianWarm" class="icon-btn hidden" onclick="window.guardianWarmUp()" title="Согреть">🔥</button>
             </div>
         </header>
 
         <main class="game-main">
+            
             <aside class="inventory-panel card">
                 <h2>🎒 Рюкзак</h2>
                 <ul id="inventoryList" class="inventory-list">
-                    <li class="muted">Пусто...</li>
+                    <li class="muted">Загрузка предметов...</li>
                 </ul>
             </aside>
 
-            <section class="map-window card">
-                <h2>🗺️ Локация</h2>
-                <div class="map-placeholder"></div>
-            </section>
+            <div id="map-container" class="map-wrapper card">
+                <div id="interactiveMap"></div>
+                <button id="btnLocate" class="locate-btn">📍 Где я?</button>
+                
+                <div class="map-legend">
+                    <div><span class="mark tent"></span> Палатка</div>
+                    <div><span class="mark npc"></span> NPC</div>
+                    <div><span class="mark team"></span> Игроки</div>
+                    <div><span class="mark me"></span> Вы</div>
+                </div>
+            </div>
 
             <section class="bottom-panel">
                 <div class="tasks-panel card">
@@ -81,10 +96,28 @@
 
                 <div class="team-info-panel card">
                     <h2>Состав (<span id="myTeamMembersCount">0</span>)</h2>
-                    <ul id="currentTeamMembersList" class="member-list"></ul>
+                    <ul id="currentTeamMembersList" class="member-list">
+                        <li class="muted">Загрузка...</li>
+                    </ul>
                 </div>
             </section>
         </main>
+    </div>
+
+    <div id="interactionModal" class="modal-backdrop hidden">
+        <div class="modal-content" style="text-align: center;">
+            <div class="modal-header-strip"></div>
+            <div class="modal-top-row">
+                <h3 class="modal-title" id="interactTitle">...</h3>
+                <button class="modal-close" onclick="document.getElementById('interactionModal').classList.add('hidden')">×</button>
+            </div>
+            
+            <div id="interactIcon" style="font-size: 4rem; margin: 10px 0;">⛺</div>
+            
+            <div id="interactDesc" style="margin-bottom: 20px; font-size: 1.1rem;">...</div>
+            
+            <div id="interactButtons" style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;"></div>
+        </div>
     </div>
 
     <div id="itemsGuideModal" class="modal-backdrop hidden">
@@ -92,7 +125,7 @@
             <div class="modal-header-strip"></div>
             <div class="modal-top-row">
                 <h3 class="modal-title">📖 ПРЕДМЕТЫ</h3>
-                <button class="modal-close" onclick="closeItemsGuide()">×</button>
+                <button class="modal-close" onclick="window.closeItemsGuide()">×</button>
             </div>
             <div class="tasks-container" style="max-height: 400px; overflow-y: auto;">
                 <table class="tasks-table">
@@ -107,7 +140,7 @@
              <div class="modal-header-strip"></div>
              <div class="modal-top-row">
                 <h3 class="modal-title">🤝 ПРЕДЛОЖИТЬ</h3>
-                <button class="modal-close" onclick="closeTradeModal()">×</button>
+                <button class="modal-close" onclick="window.closeTradeModal()">×</button>
             </div>
             <label class="label-accent">1. Кому:</label> 
             <select id="tradeTargetTeam" class="modal-input"></select>
@@ -115,7 +148,7 @@
             <select id="tradeOfferSelect" class="modal-input"></select>
             <label class="label-accent" style="color:var(--accent-red)">3. Просим:</label> 
             <select id="tradeRequestSelect" class="modal-input"></select>
-            <button class="start-button" onclick="sendTradeRequest()">Отправить</button>
+            <button class="start-button" onclick="window.sendTradeRequest()">Отправить</button>
         </div>
     </div>  
 
@@ -124,7 +157,7 @@
             <div class="modal-header-strip"></div>
             <div class="modal-top-row">
                 <h3 class="modal-title">📨 ВХОДЯЩИЕ</h3>
-                <button class="modal-close" onclick="closeIncomingTrades()">×</button>
+                <button class="modal-close" onclick="window.closeIncomingTrades()">×</button>
             </div>
             <div id="incomingTradesList"></div>
         </div>
@@ -134,11 +167,6 @@
         <div class="modal-content" style="text-align: center; border: 2px solid var(--accent-gold);">
             <h1 id="endTitle" style="font-size: 2rem; margin-bottom: 10px; text-transform: uppercase;"></h1>
             <p id="endMessage" style="font-size: 1.1rem; color: var(--text-main); margin-bottom: 20px; line-height: 1.5;"></p>
-            <div id="winnersListBlock" class="hidden" style="margin: 15px 0; padding: 15px; background: rgba(255,215,0,0.1); border: 1px solid var(--accent-gold); border-radius: 10px;">
-                <h3 style="color: var(--accent-gold); margin:0; font-size: 1rem;">🏆 ПЕРВЫЕ МЕСТА:</h3>
-                <p id="winnersNames" style="font-size: 1.3rem; font-weight: 900; color: #fff; margin-top: 5px; text-shadow: 0 2px 10px rgba(0,0,0,0.5);"></p>
-            </div>
-            <p style="font-style: italic; color: var(--accent-green); margin-top: 20px; font-size: 1rem;">📍 Проследуйте на финальную локацию!</p>
             <button id="btnCloseModal" class="start-button hidden" onclick="document.getElementById('endGameModal').classList.add('hidden')">Понятно</button>
         </div>
     </div>
@@ -147,7 +175,7 @@
         <div class="modal-content">
             <div class="modal-top-row">
                 <h3 class="modal-title">❄️ ЗАМОРОЗИТЬ КОГО?</h3>
-                <button class="modal-close" onclick="closeTargetModal()">×</button>
+                <button class="modal-close" onclick="window.closeTargetModal()">×</button>
             </div>
             <p class="muted" style="margin-bottom: 15px;">Выберите команду, чтобы остановить их прогресс:</p>
             <select id="targetSelect" class="modal-input" style="margin-bottom: 20px;"></select>
@@ -164,13 +192,12 @@
                 <h3 class="modal-title" style="color: #d946ef;">⚒️ МАСТЕРСКАЯ</h3>
                 <button class="modal-close" onclick="document.getElementById('craftModal').classList.add('hidden')">×</button>
             </div>
-            <p class="muted" style="margin-bottom: 15px; text-align: center; font-size: 0.9rem;">
-                Соединяйте предметы, чтобы создавать легендарные артефакты!
-            </p>
             <div id="craftRecipesList" style="max-height: 60vh; overflow-y: auto; padding-right: 5px;"></div>
         </div>
     </div>
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
     <script type="module" src="game.js"></script>
 </body>
 </html>
