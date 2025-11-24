@@ -42,7 +42,7 @@
                 <button class="icon-btn" onclick="window.openCraftModal()" style="color: #d946ef;" title="Крафт">⚒️</button>
                 
                 <!-- ✅ КНОПКА ОБМЕНА: ТОЛЬКО ВХОДЯЩИЕ, ТОЛЬКО ДЛЯ ЛИДЕРОВ/ПЕРЕГОВОРЩИКОВ -->
-                <button id="btnShowTrades" class="secondary hidden" onclick="window.openIncomingTrades()">Обмен 💛</button>
+                <button id="btnShowTrades" class="secondary hidden" onclick="window.openIncomingTrades()">ВХОДЯЩИЕ 💛</button>
                 
                
                 <button id="btnSpyAction" class="icon-btn hidden" onclick="window.openSpyModal()" title="Шпионаж">🕵️‍♂️</button>
@@ -155,7 +155,7 @@
         </div>
     </div>  
 
-    <!-- 📨 ВХОДЯЩИЕ ЗАПРОСЫ (открывается из шапки) -->
+    <!-- 📨 ВХОДЯЩИЕ ЗАПРОСЫ Модуальное окно -->
     <div id="incomingTradesModal" class="modal-backdrop hidden">
         <div class="modal-content">
             <div class="modal-header-strip"></div>
@@ -164,7 +164,7 @@
                 <button class="modal-close" onclick="window.closeIncomingTrades()">×</button>
             </div>
             <div id="incomingTradesList"></div>
-        </div>
+        </div>  
     </div>
 
     <!-- End Game Modal -->

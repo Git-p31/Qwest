@@ -169,6 +169,11 @@ export async function sendTradeRequest(toTeamId, offerItemId, requestItemId) {
     return { success: false, msg: 'У вас нет этого предмета для обмена' };
   }
 
+  // Проверка: существует ли предмет в базе (защита от подделки)
+  if (!state.globalItems[offerItemId] || !state.globalItems[requestItemId]) {
+    return { success: false, msg: 'Неверный ID предмета' };
+  }
+
   const { error } = await supabase.from('trade_requests').insert({
     from_team_id: state.me.team_id,
     to_team_id: toTeamId,
@@ -211,7 +216,7 @@ export async function respondToTrade(tradeId, accept = true) {
   const newStatus = accept ? 'accepted' : 'rejected';
   
   // Получаем данные обмена
-  const {  trade, error: fetchError } = await supabase
+  const { data: trade, error: fetchError } = await supabase
     .from('trade_requests')
     .select('*')
     .eq('id', tradeId)
@@ -235,13 +240,13 @@ export async function respondToTrade(tradeId, accept = true) {
   if (accept) {
     try {
       // Получаем актуальные данные команд
-      const {  fromTeam } = await supabase
+      const { data: fromTeam } = await supabase
         .from('teams')
         .select('inventory')
         .eq('id', trade.from_team_id)
         .single();
       
-      const {  toTeam } = await supabase
+      const { data: toTeam } = await supabase
         .from('teams')
         .select('inventory')
         .eq('id', state.me.team_id)

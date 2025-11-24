@@ -354,19 +354,19 @@ function showPopup(item, type, id) {
     descEl.innerHTML = item.desc || '';
     btns.innerHTML = '';
 
-        if (type === 'tent') {
-            if (['leader', 'Negotiator'].includes(state.me.role)) {
-                // ✅ ТОЛЬКО КНОПКА "ПРЕДЛОЖИТЬ ОБМЕН"
-                btns.innerHTML = `
-                    <button class="propose-trade-btn" onclick="window.openTradeModal()">
-                        💛 ПРЕДЛОЖИТЬ ОБМЕН
-                    </button>
-                `;
-                descEl.innerHTML += `<p style="margin-top:10px; font-size:0.9rem; color:var(--text-muted);">Приходите в эту палатку — когда другая команда придет сюда, обмен произойдет автоматически.</p>`;
-            } else {
-                descEl.innerHTML += `<br><br><span class="muted" style="color:#ff5555">Только Лидер или Переговорщик могут предлагать обмены.</span>`;
-            }
+    if (type === 'tent') {
+        if (['leader', 'Negotiator'].includes(state.me.role)) {
+            // ✅ ТОЛЬКО КНОПКА "ПРЕДЛОЖИТЬ ОБМЕН"
+            btns.innerHTML = `
+                <button class="propose-trade-btn" onclick="window.openTradeModal()">
+                    💛 ПРЕДЛОЖИТЬ ОБМЕН
+                </button>
+            `;
+            descEl.innerHTML += `<p style="margin-top:10px; font-size:0.9rem; color:var(--text-muted);">Приходите в эту палатку — когда другая команда придет сюда, обмен произойдет автоматически.</p>`;
+        } else {
+            descEl.innerHTML += `<br><br><span class="muted" style="color:#ff5555">Только Лидер или Переговорщик могут предлагать обмены.</span>`;
         }
+    }
     
     modal.classList.remove('hidden');
 }
@@ -495,6 +495,7 @@ window.openTradeModal = () => {
   offerSel.innerHTML = '<option value="">Что отдать?</option>';
   reqSel.innerHTML = '<option value="">Что получить?</option>';
 
+  // Отдаем — только то, что есть
   Object.entries(inv)
     .filter(([id, count]) => count > 0)
     .forEach(([id, count]) => {
@@ -505,12 +506,15 @@ window.openTradeModal = () => {
       opt1.value = id;
       opt1.textContent = `${item.emoji || '📦'} ${item.name} ×${count}`;
       offerSel.appendChild(opt1);
-
-      const opt2 = document.createElement('option');
-      opt2.value = id;
-      opt2.textContent = `${item.emoji || '🎁'} ${item.name}`;
-      reqSel.appendChild(opt2);
     });
+
+  // Просим — все предметы из базы
+  Object.values(state.globalItems).forEach(item => {
+    const opt2 = document.createElement('option');
+    opt2.value = item.id;
+    opt2.textContent = `${item.emoji || '🎁'} ${item.name}`;
+    reqSel.appendChild(opt2);
+  });
 };
 
 window.sendTradeRequest = async () => {
