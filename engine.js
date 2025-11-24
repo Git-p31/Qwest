@@ -160,4 +160,138 @@ export function setupRealtimeListeners(onMyTeamUpdate, onGlobalUpdate) {
         .subscribe();
 }
 
-// !!! УДАЛЕНЫ ЧИТЕРСКИЕ ФУНКЦИИ completeAllTasksInstantly и triggerLastChanceTimer !!!
+// ===== TRADE SYSTEM FUNCTIONS =====
+
+export async function sendTradeRequest(toTeamId, offerItemId, requestItemId) {
+  // Проверка: есть ли предмет у отправителя
+  const inv = state.currentTeam?.inventory || {};
+  if ((inv[offerItemId] || 0) < 1) {
+    return { success: false, msg: 'У вас нет этого предмета для обмена' };
+  }
+
+  const { error } = await supabase.from('trade_requests').insert({
+    from_team_id: state.me.team_id,
+    to_team_id: toTeamId,
+    offer_item_id: offerItemId,
+    request_item_id: requestItemId,
+    status: 'pending'
+  });
+
+  if (error) {
+    console.error('Trade send error:', error);
+    return { success: false, msg: 'Не удалось отправить обмен' };
+  }
+  return { success: true };
+}
+
+export async function fetchIncomingTrades() {
+  const { data, error } = await supabase
+    .from('trade_requests')
+    .select(`
+      id,
+      from_team_id,
+      offer_item_id,
+      request_item_id,
+      teams!from_team_id(name, name_by_leader)
+    `)
+    .eq('to_team_id', state.me.team_id)
+    .eq('status', 'pending');
+
+  if (error) {
+    console.error('Fetch trades error:', error);
+    return [];
+  }
+  return data.map(t => ({
+    ...t,
+    from_team_name: t.teams.name_by_leader || t.teams.name
+  }));
+}
+
+export async function respondToTrade(tradeId, accept = true) {
+  const newStatus = accept ? 'accepted' : 'rejected';
+  
+  // Получаем данные обмена
+  const {  trade, error: fetchError } = await supabase
+    .from('trade_requests')
+    .select('*')
+    .eq('id', tradeId)
+    .single();
+
+  if (fetchError || !trade) {
+    return { success: false, msg: 'Обмен не найден' };
+  }
+
+  // Обновляем статус
+  const { error: updateError } = await supabase
+    .from('trade_requests')
+    .update({ status: newStatus })
+    .eq('id', tradeId);
+
+  if (updateError) {
+    console.error('Update trade status error:', updateError);
+    return { success: false, msg: 'Ошибка при обновлении статуса' };
+  }
+
+  if (accept) {
+    try {
+      // Получаем актуальные данные команд
+      const {  fromTeam } = await supabase
+        .from('teams')
+        .select('inventory')
+        .eq('id', trade.from_team_id)
+        .single();
+      
+      const {  toTeam } = await supabase
+        .from('teams')
+        .select('inventory')
+        .eq('id', state.me.team_id)
+        .single();
+
+      if (!fromTeam || !toTeam) {
+        return { success: false, msg: 'Одна из команд не найдена' };
+      }
+
+      const invFrom = { ...fromTeam.inventory };
+      const invTo = { ...toTeam.inventory };
+
+      // Проверка наличия предметов на момент принятия
+      if ((invFrom[trade.offer_item_id] || 0) < 1) {
+        return { success: false, msg: 'У отправителя больше нет предмета для обмена' };
+      }
+      if ((invTo[trade.request_item_id] || 0) < 1) {
+        return { success: false, msg: 'У вас больше нет запрашиваемого предмета' };
+      }
+
+      // === ВЫПОЛНЕНИЕ ОБМЕНА ===
+      // Отправитель ОТДАЁТ offer_item_id → ПОЛУЧАЕТ request_item_id
+      invFrom[trade.offer_item_id]--;
+      invFrom[trade.request_item_id] = (invFrom[trade.request_item_id] || 0) + 1;
+
+      // Получатель (вы) ОТДАЁТЕ request_item_id → ПОЛУЧАЕТЕ offer_item_id
+      invTo[trade.request_item_id]--;
+      invTo[trade.offer_item_id] = (invTo[trade.offer_item_id] || 0) + 1;
+
+      // Обновляем инвентарь
+      const { error: err1 } = await supabase
+        .from('teams')
+        .update({ inventory: invFrom })
+        .eq('id', trade.from_team_id);
+
+      const { error: err2 } = await supabase
+        .from('teams')
+        .update({ inventory: invTo })
+        .eq('id', state.me.team_id);
+
+      if (err1 || err2) {
+        console.error('Inventory update error:', err1 || err2);
+        return { success: false, msg: 'Ошибка при обновлении инвентаря' };
+      }
+
+    } catch (e) {
+      console.error('Critical trade execution error:', e);
+      return { success: false, msg: 'Системная ошибка при выполнении обмена' };
+    }
+  }
+
+  return { success: true };
+}

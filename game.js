@@ -2,7 +2,8 @@ import {
     state, GADGET_COOLDOWN_MS, ROLES_DATA, CRAFT_RECIPES,
     authPlayer, refreshTeamData, fetchAllTeamsData, 
     setTentStatus, clearTentStatus, craftItemLogic, useGadgetLogic, setupRealtimeListeners,
-    updateTaskAndInventory, fetchGlobalGameState
+    updateTaskAndInventory, fetchGlobalGameState,
+    sendTradeRequest, fetchIncomingTrades, respondToTrade
 } from './engine.js';
 
 // ===== UI CONFIG and GLOBALS =====
@@ -38,6 +39,9 @@ async function initGame() {
     if (state.me.role === 'Spy') document.getElementById('btnSpyAction')?.classList.remove('hidden');
     if (state.me.role === 'Scavenger') document.getElementById('btnScavenge')?.classList.remove('hidden');
     if (state.me.role === 'Guardian') document.getElementById('btnGuardianWarm')?.classList.remove('hidden');
+    if (['leader', 'Negotiator'].includes(state.me.role)) {
+        document.getElementById('btnShowTrades')?.classList.remove('hidden');
+    }
 
     await fetchAllTeamsData();
     await refreshTeamData();
@@ -56,7 +60,6 @@ async function initGame() {
             if (state.currentTeam?.current_tent_id && updatedTeam.current_tent_id === state.currentTeam.current_tent_id && updatedTeam.id !== state.me.team_id) {
                 performExchange(updatedTeam);
             }
-            // Global Timer check is now integrated here if needed.
         }
     );
 
@@ -351,17 +354,19 @@ function showPopup(item, type, id) {
     descEl.innerHTML = item.desc || '';
     btns.innerHTML = '';
 
-    if (type === 'tent') {
-        if (['leader', 'Negotiator'].includes(state.me.role)) {
-            btns.innerHTML = `
-                <button class="start-button" style="background: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 100%); color:#333; font-weight:900;" onclick="window.enterTent('${id}')">
-                    ОБМЕНЯТЬСЯ 🤝
-                </button>
-            `;
-        } else {
-            descEl.innerHTML += `<br><br><span class="muted" style="color:#ff5555">Только Лидер или Переговорщик могут начать обмен.</span>`;
+        if (type === 'tent') {
+            if (['leader', 'Negotiator'].includes(state.me.role)) {
+                // ✅ ТОЛЬКО КНОПКА "ПРЕДЛОЖИТЬ ОБМЕН"
+                btns.innerHTML = `
+                    <button class="propose-trade-btn" onclick="window.openTradeModal()">
+                        💛 ПРЕДЛОЖИТЬ ОБМЕН
+                    </button>
+                `;
+                descEl.innerHTML += `<p style="margin-top:10px; font-size:0.9rem; color:var(--text-muted);">Приходите в эту палатку — когда другая команда придет сюда, обмен произойдет автоматически.</p>`;
+            } else {
+                descEl.innerHTML += `<br><br><span class="muted" style="color:#ff5555">Только Лидер или Переговорщик могут предлагать обмены.</span>`;
+            }
         }
-    }
     
     modal.classList.remove('hidden');
 }
@@ -461,6 +466,120 @@ window.handleItemUse = async (id) => {
          alert("Гаджет не настроен для использования.");
     }
 };
+
+// ================= ОБМЕН ЧЕРЕЗ МОДАЛЬНОЕ ОКНО =================
+
+window.openTradeModal = () => {
+  if (!['leader', 'Negotiator'].includes(state.me.role)) {
+    alert('Только Лидер или Переговорщик могут предлагать обмен.');
+    return;
+  }
+
+  const modal = document.getElementById('tradeModal');
+  modal.classList.remove('hidden');
+
+  // Команды
+  const teamSelect = document.getElementById('tradeTargetTeam');
+  teamSelect.innerHTML = '<option value="">Выберите команду</option>';
+  state.otherTeams.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.id;
+    opt.textContent = `${t.name_by_leader || t.name} ${TEAMS_UI_CONFIG[t.id]?.symbol || ''}`;
+    teamSelect.appendChild(opt);
+  });
+
+  // Предметы
+  const inv = state.currentTeam.inventory || {};
+  const offerSel = document.getElementById('tradeOfferSelect');
+  const reqSel = document.getElementById('tradeRequestSelect');
+  offerSel.innerHTML = '<option value="">Что отдать?</option>';
+  reqSel.innerHTML = '<option value="">Что получить?</option>';
+
+  Object.entries(inv)
+    .filter(([id, count]) => count > 0)
+    .forEach(([id, count]) => {
+      const item = state.globalItems[id];
+      if (!item) return;
+
+      const opt1 = document.createElement('option');
+      opt1.value = id;
+      opt1.textContent = `${item.emoji || '📦'} ${item.name} ×${count}`;
+      offerSel.appendChild(opt1);
+
+      const opt2 = document.createElement('option');
+      opt2.value = id;
+      opt2.textContent = `${item.emoji || '🎁'} ${item.name}`;
+      reqSel.appendChild(opt2);
+    });
+};
+
+window.sendTradeRequest = async () => {
+  const to = Number(document.getElementById('tradeTargetTeam').value);
+  const offer = Number(document.getElementById('tradeOfferSelect').value);
+  const request = Number(document.getElementById('tradeRequestSelect').value);
+
+  if (!to || !offer || !request) return alert('Заполните все поля');
+
+  const res = await sendTradeRequest(to, offer, request);
+  if (res.success) {
+    alert('✅ Предложение отправлено!');
+    document.getElementById('tradeModal').classList.add('hidden');
+  } else {
+    alert('❌ ' + res.msg);
+  }
+};
+
+window.openIncomingTrades = async () => {
+  const trades = await fetchIncomingTrades();
+  const list = document.getElementById('incomingTradesList');
+  list.innerHTML = trades.length === 0 
+    ? '<p class="muted" style="padding:15px;">Нет входящих предложений</p>'
+    : trades.map(t => {
+        const offer = state.globalItems[t.offer_item_id];
+        const req = state.globalItems[t.request_item_id];
+        const myInv = state.currentTeam.inventory || {};
+        const canFulfill = (myInv[t.request_item_id] || 0) >= 1;
+
+        return `
+          <div class="incoming-trade-card">
+            <p><strong>${t.from_team_name}</strong> предлагает:</p>
+            <p>📤 ${offer?.emoji || '📦'} ${offer?.name || '???'}</p>
+            <p>в обмен на:</p>
+            <p style="color:${canFulfill ? 'var(--accent-green)' : 'var(--accent-red)'}">
+              📥 ${req?.emoji || '🎁'} ${req?.name || '???'} ${!canFulfill ? ' (у вас нет)' : ''}
+            </p>
+            <div style="display:flex; gap:10px; margin-top:12px;">
+              <button class="start-button" ${!canFulfill ? 'disabled' : ''} onclick="window.acceptTrade(${t.id})">Принять</button>
+              <button class="secondary" onclick="window.rejectTrade(${t.id})">Отклонить</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+  document.getElementById('incomingTradesModal').classList.remove('hidden');
+};
+
+window.acceptTrade = async (id) => {
+  const res = await respondToTrade(id, true);
+  if (res.success) {
+    alert('Обмен выполнен!');
+    await refreshTeamData();
+    renderGameInterface();
+    window.openIncomingTrades();
+  } else {
+    alert('Ошибка: ' + res.msg);
+  }
+};
+
+window.rejectTrade = async (id) => {
+  await respondToTrade(id, false);
+  window.openIncomingTrades();
+};
+
+window.closeTradeModal = () => document.getElementById('tradeModal').classList.add('hidden');
+window.closeIncomingTrades = () => document.getElementById('incomingTradesModal').classList.add('hidden');
+
+// ================= FREEZE & EFFECTS =================
 
 function checkFreezeState() {
     const isFrozen = state.currentTeam?.frozen_until && new Date(state.currentTeam.frozen_until) > new Date();

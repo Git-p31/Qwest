@@ -11,6 +11,7 @@
   --accent-green: #00D68F;
   --accent-ice: #00FFFF;
   --gradient-btn: linear-gradient(135deg, #D90026 0%, #FF8C00 100%);
+  --gradient-trade: linear-gradient(90deg, #FF5555, #FFA500); /* Новый градиент для обмена */
   --stripe-color-1: #D90026; 
   --stripe-color-2: #620818;
   --font-main: 'Inter', system-ui, -apple-system, sans-serif;
@@ -115,7 +116,7 @@ h2 { color: var(--accent-gold); margin: 5px 0 15px 0; font-size: 1.1rem; text-tr
 .map-legend .mark { width: 10px; height: 10px; margin-right: 8px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.3); }
 .map-legend .tent { background: #ffd166; } .map-legend .npc { background: #6ee7b7; } .map-legend .team { background: #93c5fd; } .map-legend .me { background: #fb7185; }
 
-/* Modals */
+/* === MODALS === */
 .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); z-index: 9999; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
 .modal-content { width: 90%; max-width: 450px; background: #1a1a24; border-radius: 20px; padding: 25px; position: relative; border: 1px solid var(--glass-border); max-height: 90vh; overflow-y: auto; }
 .modal-header-strip { position: absolute; top: 0; left: 0; right: 0; height: 6px; background: repeating-linear-gradient(90deg, var(--accent-gold), var(--accent-gold) 20px, #b8860b 20px, #b8860b 40px); }
@@ -124,7 +125,82 @@ h2 { color: var(--accent-gold); margin: 5px 0 15px 0; font-size: 1.1rem; text-tr
 .modal-top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; margin-top: 5px; }
 .modal-input { width: 100%; padding: 12px; background: #0f1218; border: 1px solid #333; border-radius: 8px; color: #fff; margin-bottom: 10px; font-size: 1rem; }
 .label-accent { display: block; color: var(--accent-gold); font-size: 0.8rem; margin: 15px 0 5px 0; font-weight: bold; text-transform: uppercase; }
-.start-button { width: 100%; padding: 15px; border-radius: 50px; font-weight: 900; text-transform: uppercase; background: var(--gradient-btn); color: #fff; border: none; cursor: pointer; margin-top: 20px; font-size: 1rem; }
+
+/* === КНОПКИ ОБМЕНА === */
+.start-button {
+    width: 100%; padding: 15px; border-radius: 50px;
+    font-weight: 900; text-transform: uppercase;
+    background: var(--gradient-btn);
+    color: #fff; border: none; cursor: pointer;
+    margin-top: 20px; font-size: 1rem;
+    transition: all 0.2s ease;
+}
+.start-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(217, 0, 38, 0.4);
+}
+
+/* === КНОПКА "ПРЕДЛОЖИТЬ ОБМЕН" В ПАЛАТКЕ === */
+.propose-trade-btn {
+    background: var(--gradient-trade) !important;
+    color: white !important;
+    margin-top: 12px;
+    font-weight: bold;
+    border: none;
+    padding: 12px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+}
+.propose-trade-btn:hover {
+    transform: scale(1.02);
+    box-shadow: 0 0 15px rgba(255, 165, 0, 0.5);
+}
+
+/* === СТИЛИ ДЛЯ МОДАЛКИ "ПРЕДЛОЖИТЬ ОБМЕН" === */
+#tradeModal .modal-content {
+    background: #12121c;
+    border: 1px solid rgba(255, 215, 0, 0.4);
+}
+
+#tradeModal .modal-header-strip {
+    background: repeating-linear-gradient(90deg, #FFA500, #FFA500 20px, #D2691E 20px, #D2691E 40px);
+}
+
+#tradeModal .modal-title {
+    color: #FFA500;
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+#tradeModal .label-accent {
+    color: #FFD700;
+}
+
+#tradeModal .label-accent[style*="accent-green"] {
+    color: var(--accent-green) !important;
+}
+#tradeModal .label-accent[style*="accent-red"] {
+    color: var(--accent-red) !important;
+}
+
+#tradeModal .start-button {
+    background: var(--gradient-trade);
+    margin-top: 25px;
+}
+
+/* === СТИЛИ ДЛЯ ВХОДЯЩИХ ЗАПРОСОВ === */
+.incoming-trade-card {
+    background: rgba(30, 30, 40, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 12px;
+    animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* === Остальные стили без изменений === */
 button.secondary { background: transparent; border: 1px solid #555; color: #ccc; padding: 8px 15px; border-radius: 8px; cursor: pointer; }
 
 /* VFX Overlays */
@@ -146,92 +222,21 @@ button.secondary { background: transparent; border: 1px solid #555; color: #ccc;
 body.frozen-mode .map-wrapper, body.frozen-mode .tasks-panel, body.frozen-mode .team-info-panel, body.frozen-mode .header-right > button:not(#btnGuardianWarm) { filter: grayscale(1) blur(2px); opacity: 0.6; pointer-events: none; }
 body.frozen-mode #btnGuardianWarm { pointer-events: auto !important; opacity: 1 !important; filter: none !important; animation: pulse-red 1s infinite; border: 2px solid var(--accent-red); box-shadow: 0 0 20px var(--accent-red); }
 @keyframes pulse-red { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
-.craft-recipe { background: rgba(255,255,255,0.05); padding: 10px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #333; }
-.ingredient.missing { opacity: 0.3; filter: grayscale(1); }
-.craft-result { font-size: 2rem; background: rgba(255,215,0,0.1); padding: 10px; border-radius: 50%; border: 1px solid var(--accent-gold); }
+.craft-recipe { background: rgba(25, 35, 50, 0.95); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 15px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px; }
+.recipe-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; margin-bottom: 5px; }
+.recipe-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; }
+.ingredients-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.ingredient-box { display: flex; flex-direction: column; align-items: center; background: rgba(255,255,255,0.05); border: 1px solid #444; border-radius: 6px; padding: 5px; min-width: 50px; position: relative; }
+.ingredient-box.has-it { border-color: var(--accent-green); background: rgba(0, 214, 143, 0.1); }
+.ingredient-box.missing { border-color: var(--accent-red); opacity: 0.6; }
+.ing-icon { font-size: 1.5rem; }
+.ing-count { font-size: 0.75rem; font-weight: bold; margin-top: 2px; }
+.arrow-sign { font-size: 1.2rem; color: #666; font-weight: bold; }
+.craft-result { display: flex; align-items: center; justify-content: center; width: 60px; height: 60px; background: radial-gradient(circle, rgba(255,215,0,0.2) 0%, transparent 70%); border: 1px solid var(--accent-gold); border-radius: 50%; font-size: 2rem; box-shadow: 0 0 10px rgba(255, 215, 0, 0.2); }
 .btn-use { background: var(--accent-gold); border: none; border-radius: 4px; font-weight: bold; cursor: pointer; padding: 4px 8px; font-size: 0.7rem; }
 .pulse-gold { animation: pulse-gold-anim 2s infinite; border-color: var(--accent-gold); }
 @keyframes pulse-gold-anim { 0% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 215, 0, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); } }
 
-/* === CRAFTING UI (FIXED) === */
-.craft-recipe {
-    background: rgba(25, 35, 50, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    padding: 15px;
-    margin-bottom: 15px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.recipe-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-    padding-bottom: 8px;
-    margin-bottom: 5px;
-}
-
-.recipe-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    background: rgba(0,0,0,0.2);
-    padding: 10px;
-    border-radius: 8px;
-}
-
-.ingredients-group {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.ingredient-box {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid #444;
-    border-radius: 6px;
-    padding: 5px;
-    min-width: 50px;
-    position: relative;
-}
-
-.ingredient-box.has-it { border-color: var(--accent-green); background: rgba(0, 214, 143, 0.1); }
-.ingredient-box.missing { border-color: var(--accent-red); opacity: 0.6; }
-
-.ing-icon { font-size: 1.5rem; }
-.ing-count { font-size: 0.75rem; font-weight: bold; margin-top: 2px; }
-
-.arrow-sign { font-size: 1.2rem; color: #666; font-weight: bold; }
-
-.craft-result {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 60px;
-    height: 60px;
-    background: radial-gradient(circle, rgba(255,215,0,0.2) 0%, transparent 70%);
-    border: 1px solid var(--accent-gold);
-    border-radius: 50%;
-    font-size: 2rem;
-    box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);
-}
-
 /* === TENT WAITING ANIMATION === */
-.tent-waiting {
-    text-align: center;
-    padding: 20px;
-}
-.loader-spinner {
-    width: 40px; height: 40px; border: 4px solid #fff;
-    border-top-color: var(--accent-gold); border-radius: 50%;
-    margin: 0 auto 15px auto;
-    animation: spin 1s linear infinite;
-}
-@keyframes spin { 100% { transform: rotate(360deg); } }
+.tent-waiting { text-align: center; padding: 20px; }
+.loader-spinner { width: 40px; height: 40px; border: 4px solid #fff; border-top-color: var(--accent-gold); border-radius: 50%; margin: 0 auto 15px auto; animation: spin 1s linear infinite; }
