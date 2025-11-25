@@ -1,76 +1,28 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
-    <title>Выбор Команды</title>
+    <title>Stuttgart: Последний Зимний Свет</title>
     <link rel="stylesheet" href="index.css" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
 </head>
-<body class="selection-body">
-    <canvas id="snowCanvas"></canvas>
-
-    <div class="selection-wrap">
-        <header>
-            <div class="image-wrap card-style-photo">
-                <img src="image.png" alt="Stuttgart Winter" class="event-photo">
+<body class="story-body">
+    
+    <div id="story-overlay"></div>
+    
+    <div id="story-wrap">
+        <div id="story-text-container">
             </div>
-            <h1 class="game-title">Stuttgart Talks</h1>
-            <div id="status-selection" class="status-selection">Подключение...</div>
-        </header>
-
-        <section class="selection-card">
-            <div class="garland-wrap">
-                <span class="bulb"></span><span class="bulb"></span><span class="bulb"></span>
-                <span class="bulb"></span><span class="bulb"></span><span class="bulb"></span><span class="bulb"></span>
-            </div>
-
-            <h2 style="font-size: 1rem; margin-bottom: 10px;">1. Выберите команду:</h2>
-            <div id="teamSelection" class="team-selection-grid"></div>
-
-            <h2 style="font-size: 1rem; margin-bottom: 10px;">2. Выберите роль:</h2>
-            <div id="roleSelection" class="role-selection-grid">
-                <button class="role-card" data-role="Explorer">🧭 Исследователь</button>
-                <button class="role-card" data-role="Guardian">🛡️ Хранитель</button>
-                <button class="role-card" data-role="Saboteur">💣 Диверсант</button>
-                <button class="role-card" data-role="Negotiator">🤝 Переговорщик</button>
-                <button class="role-card" data-role="Spy">🕵️‍♂️ Шпион</button>
-                <button class="role-card" data-role="Scavenger">🧤 Кладоискатель</button>
-            </div>
-            
-            <div class="name-input-container">
-                <input id="nameInput" type="text" placeholder="Введите ваше имя" autocomplete="off" />
-                <div id="authMsg" class="hint"></div>
-                <button id="btnStartAdventure" disabled class="start-button">НАЧАТЬ ИГРУ</button>
-            </div>
-        </section>
-    </div>
-
-    <div id="teamModal" class="modal-backdrop hidden">
-        <div class="modal-content card">
-            <button class="modal-close" onclick="document.getElementById('teamModal').classList.add('hidden')">✖</button>
-            <h2 id="modalTitle">Настройка Команды</h2>
-
-            <div style="margin: 20px 0;">
-                <p class="muted" style="margin-bottom:5px;">Название команды:</p>
-                <input type="text" id="modalNewTeamNameInput" placeholder="Например: Ледяные Волки" class="modal-input">
-            </div>
-
-            <div id="modalSelfieDisplay" style="margin-bottom: 15px; text-align: center;">
-                <div style="width: 80px; height: 80px; background: rgba(255,255,255,0.1); border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; font-size: 2rem;">📸</div>
-            </div>
-            
-            <label for="modalSelfieUpload" class="start-button modal-button-full" style="cursor: pointer;">
-                Загрузить Фото
-            </label>
-            <input type="file" id="modalSelfieUpload" accept="image/*" class="hidden"> 
-            
-            <button id="modalBtnFinish" class="start-button modal-button-full" style="margin-top: 10px; background: var(--accent-cyan); color: #000;">
-                Сохранить
-            </button>
+        
+        <div id="story-controls">
+            <button id="skip-button" class="story-button">Нажмите, чтобы начать...</button>
+            <button id="start-button" class="story-button hidden">НАЧАТЬ ПРИКЛЮЧЕНИЕ</button>
         </div>
     </div>
     
-    <script type="module" src="login.js"></script>
+    <audio id="story-audio" src="hi.mp3" preload="auto"></audio> 
+    
+    <script src="login.js"></script>
 </body>
 </html>

@@ -2,10 +2,11 @@ import {
     state, GADGET_COOLDOWN_MS, ROLES_DATA, CRAFT_RECIPES,
     authPlayer, refreshTeamData, fetchAllTeamsData, 
     setTentStatus, clearTentStatus, craftItemLogic, useGadgetLogic, setupRealtimeListeners,
-    updateTaskAndInventory, fetchGlobalGameState,
+    updateTaskAndInventory, fetchGlobalGameState, updateTeamFreezeStatus, 
     sendTradeRequest, fetchIncomingTrades, respondToTrade,
     scavengeItemLogic, SCAVENGER_COOLDOWN_MS,
-    fetchStaticMapPoints // <-- ИМПОРТ ДЛЯ ЗАГРУЗКИ ТОЧЕК КАРТЫ ИЗ БД
+    fetchStaticMapPoints,
+    QUIZ_DATA, MISSION_PATH_STRUCTURE 
 } from './engine.js';
 
 // ===== UI CONFIG and GLOBALS =====
@@ -16,8 +17,6 @@ const TEAMS_UI_CONFIG = {
     104: { color: '#bd93f9', symbol: '🎅' },
 };
 
-// ХАРДКОД STATIC_MAP_ITEMS УДАЛЕН. Точки будут загружены в staticMapPoints.
-
 let map = null;
 let mapMarkers = {};
 let wasFrozen = false;
@@ -25,11 +24,21 @@ let timerUiInterval = null;
 let hasShownVictory = false;
 
 // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ КАРТЫ И КЛАДОИСКАТЕЛЯ
-let staticMapPoints = []; // Точки (Tent, NPC) из БД
+let staticMapPoints = []; // Точки (Tent, NPC, Mission Stalls) из БД
 let dynamicSnowPiles = []; // Динамические сугробы
 let snowSpawnInterval = null;
 let lastScavengeTime = Number(localStorage.getItem('lastScavengeTime')) || 0; 
 const MAX_SNOW_PILES = 5;
+
+// --- НОВЫЙ СОСТОЯНИЕ КВИЗА ---
+let quizState = {
+    currentQuestionIndex: 0,
+    correctCount: 0,
+    totalQuestions: QUIZ_DATA.length,
+    quizInProgress: false,
+    questions: [...QUIZ_DATA] // Копируем данные
+};
+// -----------------------------
 
 // ===== INITIALIZATION & CORE =====
 async function initGame() {
@@ -47,7 +56,7 @@ async function initGame() {
         document.getElementById('btnShowTrades')?.classList.remove('hidden');
     }
 
-    // ЗАГРУЗКА СТАТИЧЕСКИХ ТОЧЕК КАРТЫ ИЗ БД
+    // ЗАГРУЗКА ВСЕХ ТОЧЕК КАРТЫ ИЗ БД
     staticMapPoints = await fetchStaticMapPoints();
     
     await fetchAllTeamsData();
@@ -102,6 +111,18 @@ function renderInventory() {
             const item = state.globalItems[id] || {name:'???', emoji:'📦', type:'item'};
             let actionBtn = '';
             
+            // --- ЛОГИКА ОТОБРАЖЕНИЯ ИКОНОК/СПРАЙТОВ ---
+            let iconHtml;
+            // Проверяем, является ли "эмодзи" URL-адресом (начинается с http)
+            if (item.emoji && item.emoji.startsWith('http')) {
+                // Отображаем как пользовательское изображение (PNG)
+                iconHtml = `<img src="${item.emoji}" alt="${item.name}" style="width: 32px; height: 32px; object-fit: contain; filter: drop-shadow(0 0 1px #FFF);">`;
+            } else {
+                // Отображаем как стандартный эмодзи
+                iconHtml = `<span style="font-size:1.5rem">${item.emoji}</span>`;
+            }
+            // ----------------------------------------
+
             if (item.type === 'gadget' && state.me.role === 'Saboteur') {
                 actionBtn = `<button class="btn-use" onclick="window.handleItemUse(${id})">USE</button>`;
             } else if (item.type === 'gadget') {
@@ -111,8 +132,7 @@ function renderInventory() {
             list.innerHTML += `
             <li>
                 <div style="display:flex;align-items:center;gap:10px; flex-grow: 1;">
-                    <span style="font-size:1.5rem">${item.emoji}</span> 
-                    <div style="display:flex; flex-direction:column;">
+                    ${iconHtml} <div style="display:flex; flex-direction:column;">
                         <span style="font-weight:bold; font-size:0.9rem;">${item.name}</span>
                     </div>
                 </div>
@@ -135,7 +155,7 @@ function renderTasks() {
     let completedCount = 0;
 
     if (tasks.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="muted" style="text-align:center; padding:15px;">Нет активных задач</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" class="muted" style="padding:10px;">Нет активных задач</td></tr>';
         progressEl.textContent = '0%';
         return;
     }
@@ -149,13 +169,22 @@ function renderTasks() {
             ? (state.globalItems[task.reward_item_id]?.emoji || '🎁') 
             : '';
 
+        let taskText = task.text;
+        
+        // Специальная обработка для задания №4: Квиз
+        if (task.id === 4 && !task.completed) {
+            // Привязываем открытие квиза к ссылке в списке миссий
+            taskText = `<a href="#" onclick="window.openQuizModal(); return false;" style="color: var(--accent-gold); text-decoration: none;">${task.text} (Начать)</a>`;
+        }
+
+
         const tr = document.createElement('tr');
         tr.className = task.completed ? 'task-row completed' : 'task-row';
         tr.innerHTML = `
             <td style="text-align:center; width:30px;">
                 <input type="checkbox" ${isChecked} ${isDisabled} onclick="window.toggleTask(${task.id}, this)">
             </td>
-            <td>${task.text}</td>
+            <td>${taskText}</td>
             <td style="text-align:center; font-size:1.2rem;">${reward}</td>
         `;
         tbody.appendChild(tr);
@@ -194,6 +223,14 @@ window.toggleTask = async (taskId, checkboxEl) => {
         return alert("Только лидер может отмечать задачи!"); 
     }
     
+    // ПРЕДУПРЕЖДЕНИЕ: Задание №4 должно быть выполнено через квиз!
+    if (taskId === 4 && !checkboxEl.checked) {
+        alert("Задание №4 (Квиз) не может быть отменено вручную. Оно должно быть подтверждено через модальное окно Квиза.");
+        checkboxEl.checked = true; // Отменяем действие
+        return;
+    }
+
+
     const task = state.currentTeam.tasks.find(t => t.id === taskId);
     if (!task) return;
     
@@ -227,6 +264,8 @@ window.toggleTask = async (taskId, checkboxEl) => {
         checkboxEl.checked = !isChecking;
         return;
     }
+    // После обновления задачи, перерисовываем маркеры, чтобы показать следующую миссию.
+    renderMarkers();
 };
 
 // ================= СПРАВОЧНИК (ФИКС БАГА 1) =================
@@ -238,7 +277,9 @@ window.openItemsGuide = () => {
 
     tbody.innerHTML = Object.values(state.globalItems).map(i => `
         <tr class="guide-item-row">
-            <td class="guide-icon" style="font-size:2rem; text-align:center;">${i.emoji || '❓'}</td>
+            <td class="guide-icon" style="font-size:2rem; text-align:center;">
+                ${i.emoji && i.emoji.startsWith('http') ? `<img src="${i.emoji}" alt="${i.name}" style="width: 40px; height: 40px; object-fit: contain; filter: drop-shadow(0 0 1px #FFF);">` : `${i.emoji || '❓'}`}
+            </td>
             <td class="guide-info" style="padding:10px;">
                 <h4>${i.name}</h4>
                 <p class="muted">${i.description || 'Нет описания'}</p>
@@ -320,12 +361,9 @@ function startSnowPileSpawning() {
         }
     };
     
-    // Изначальный спавн
     for(let i = 0; i < Math.floor(Math.random() * MAX_SNOW_PILES) + 1; i++) {
         spawnPile();
     }
-
-    // Интервал для респавна (раз в 30 секунд)
     snowSpawnInterval = setInterval(spawnPile, 30000); 
 }
 
@@ -347,13 +385,70 @@ function initMapLogic() {
     }, 3000);
 }
 
+// --- НОВАЯ КРИТИЧЕСКАЯ ФУНКЦИЯ ---
+function findActiveMission(tasks) {
+    if (!tasks || tasks.length === 0) return null;
+    
+    const activeTask = tasks.find(t => !t.completed);
+    if (!activeTask) return null; 
+        
+    let pathKey = '';
+    if (state.me.team_id === 101 || state.me.team_id === 103) {
+        pathKey = '101_103';
+    } else if (state.me.team_id === 102 || state.me.team_id === 104) {
+        pathKey = '102_104';
+    }
+
+    const pathSequence = MISSION_PATH_STRUCTURE[pathKey];
+    if (!pathSequence) return null;
+
+    const missionStep = pathSequence.find(p => p.taskId === activeTask.id);
+    if (!missionStep) return null;
+
+    // Находим КООРДИНАТЫ и данные в списке, загруженном из DB
+    const activeStall = staticMapPoints.find(p => p.title === missionStep.stallName);
+    
+    if (activeStall) {
+        return {
+            id: 'mission_active',
+            type: 'mission_stall',
+            x: activeStall.x,
+            y: activeStall.y,
+            title: activeStall.title,
+            desc: activeStall.desc,
+            taskId: activeTask.id,
+            taskText: activeTask.text,
+        };
+    }
+    
+    return null; 
+}
+
+
 function renderMarkers() {
     if(!map) return;
     
-    // 1. Статические точки (Tents, NPC) из БД
-    staticMapPoints.forEach(item => updateMarker(item.id, item.type, item.x, item.y, item.title, item, item.icon));
+    // Очищаем все маркеры с карты (кроме игрока)
+    Object.keys(mapMarkers).forEach(id => {
+        if (id !== 'me') {
+            mapMarkers[id].remove();
+            delete mapMarkers[id];
+        }
+    });
     
-    // 2. Динамические сугробы
+    // 1. Отображаем ТОЛЬКО АКТИВНУЮ МИССИЮ ИЛИ ВСЕ СТАТИЧНЫЕ ТОЧКИ
+    const mission = findActiveMission(state.currentTeam.tasks);
+
+    if (mission) {
+        // Миссия активна: показываем только ее маркер
+        updateMarker(mission.id, mission.type, mission.x, mission.y, mission.title, mission, '🎯');
+    } else {
+        // Все миссии завершены: показываем NPC, обменные палатки и все остальные статические точки
+        // Фильтруем, чтобы не показывать 12 миссионных палаток, которые уже есть в staticMapPoints
+        staticMapPoints.filter(p => p.type !== 'mission_stall').forEach(item => updateMarker(item.id, item.type, item.x, item.y, item.title, item, item.icon));
+    }
+    
+    // 2. Динамические сугробы (всегда видны)
     dynamicSnowPiles.forEach(item => updateMarker(item.id, 'snow_pile', item.x, item.y, item.title, item, '🧤'));
     
     // 3. Другие игроки и вы
@@ -370,6 +465,7 @@ function updateMarker(id, type, x, y, label, data, customSymbol) {
     let symbol = '📍';
     if(type === 'tent') symbol = '⛺';
     if(type === 'npc') symbol = '👤';
+    if(type === 'mission_stall') symbol = '🎯'; // НОВЫЙ МАРКЕР МИССИИ
     if(type === 'snow_pile') symbol = '❄️';
     if(type === 'me') symbol = '🔴';
     if(customSymbol) symbol = customSymbol;
@@ -377,12 +473,25 @@ function updateMarker(id, type, x, y, label, data, customSymbol) {
     const html = `<div class="marker ${type}"><div class="pin"><div>${symbol}</div></div><div class="label">${label}</div></div>`;
     const icon = L.divIcon({ className: 'custom-leaflet-icon', html: html, iconSize: [40, 60], iconAnchor: [20, 50] });
 
-    // Очищаем старый маркер перед обновлением, если он уже не "сугроб", чтобы избежать утечек памяти
-    if (mapMarkers[id] && type !== 'snow_pile') mapMarkers[id].setLatLng(loc);
-    else if (mapMarkers[id]) mapMarkers[id].setLatLng(loc);
+    if (mapMarkers[id]) mapMarkers[id].setLatLng(loc);
     else {
         const m = L.marker(loc, {icon: icon}).addTo(map);
-        m.on('click', (e) => { L.DomEvent.stopPropagation(e); showPopup(data, type, id); map.flyTo(loc, map.getZoom()); });
+        m.on('click', (e) => { 
+            // 1. Фикс бага двойного клика: Предотвращаем стандартное поведение Leaflet/браузера
+            L.DomEvent.stopPropagation(e); 
+            
+            // 2. Отображаем модальное окно немедленно
+            if (type === 'mission_stall') {
+                showMissionPopup(data);
+            } else {
+                showPopup(data, type, id); 
+            }
+            
+            // 3. Используем небольшую задержку для flyTo, чтобы избежать конфликта с рендерингом модального окна
+            setTimeout(() => {
+                map.flyTo(loc, map.getZoom());
+            }, 50); 
+        });
         mapMarkers[id] = m;
     }
 }
@@ -422,13 +531,51 @@ function showPopup(item, type, id) {
             descEl.innerHTML += `<br><br><span class="muted" style="color:#ff5555">Только Кладоискатель может рыться в снегу.</span>`;
         } else {
             iconEl.innerHTML = '🧤'; 
-            descEl.innerHTML += `<p style="margin-top:10px; font-size:0.9rem; color:var(--text-muted);">Искать можно раз в 5 минут.</p>`;
+            descEl.innerHTML += `<p style="margin-top:10px; font-size:0.9rem; color:var(--text-muted);">Искать можно раз в 1м 50с.</p>`;
             btns.innerHTML = `
                 <button class="start-button" onclick="window.handleScavengeInteraction('${id}')">
                     НАЧАТЬ ПОИСК
                 </button>
             `;
         }
+    }
+    
+    modal.classList.remove('hidden');
+}
+
+// --- НОВАЯ ФУНКЦИЯ ДЛЯ ОТОБРАЖЕНИЯ АКТИВНОЙ МИССИИ ---
+function showMissionPopup(missionData) {
+    const modal = document.getElementById('interactionModal');
+    const titleEl = document.getElementById('interactTitle');
+    const descEl = document.getElementById('interactDesc');
+    const btns = document.getElementById('interactButtons');
+    const iconEl = document.getElementById('interactIcon');
+
+    titleEl.textContent = missionData.title;
+    iconEl.innerHTML = '🎯';
+    
+    descEl.innerHTML = `
+        <p style="font-size: 1.1rem; color: var(--accent-gold); margin-bottom: 15px;">
+            ${missionData.taskText}
+        </p>
+        <p class="muted">
+            Вы на месте. Доказательство выполнения задания отмечает Лидер в списке миссий.
+        </p>
+    `;
+
+    // Специальная кнопка для квиза (Задание №4)
+    if (missionData.taskId === 4) {
+         btns.innerHTML = `
+            <button class="start-button" onclick="window.openQuizModal(); document.getElementById('interactionModal').classList.add('hidden');">
+                ПЕРЕЙТИ К КВИЗУ
+            </button>
+        `;
+    } else {
+        btns.innerHTML = `
+            <button class="start-button" onclick="document.getElementById('interactionModal').classList.add('hidden')">
+                ЗАКРЫТЬ
+            </button>
+        `;
     }
     
     modal.classList.remove('hidden');
@@ -493,7 +640,10 @@ function renderCraftUI() {
         const ingHTML = r.ingredients.map(ing => {
             const has = inv[ing.id] || 0;
             if(has < ing.count) can = false;
-            return `<div class="ingredient-box ${has >= ing.count?'has-it':'missing'}"><span class="ing-icon">${state.globalItems[ing.id]?.emoji || '❓'}</span><span class="ing-count">${has}/${ing.count}</span></div>`;
+            return `<div class="ingredient-box ${has >= ing.count?'has-it':'missing'}">
+                        ${state.globalItems[ing.id].emoji.startsWith('http') ? `<img src="${state.globalItems[ing.id].emoji}" alt="${state.globalItems[ing.id].name}" style="width: 24px; height: 24px; object-fit: contain; filter: drop-shadow(0 0 1px #FFF);">` : `<span class="ing-icon">${state.globalItems[ing.id]?.emoji || '❓'}</span>`}
+                        <span class="ing-count">${has}/${ing.count}</span>
+                    </div>`;
         }).join('');
 
         cont.innerHTML += `
@@ -610,7 +760,153 @@ window.handleScavengeInteraction = async (snowPileId) => {
 }
 
 
-// ================= ОБМЕН ЧЕРЕЗ МОДАЛЬНОЕ ОКНО =================
+// --- QUIZ LOGIC (Задание №4) ---
+
+window.openQuizModal = () => {
+    // ВРУЧНУЮ ДОБАВЛЯЕМ МОДАЛЬНОЕ ОКНО QUIZ
+    if (!document.getElementById('quizModal')) {
+        const quizModalHTML = `
+            <div id="quizModal" class="modal-backdrop hidden">
+                <div class="modal-content">
+                    <div class="modal-header-strip" style="background: repeating-linear-gradient(90deg, var(--accent-green), var(--accent-green) 20px, #00885f 20px, #00885f 40px);"></div>
+                    <div class="modal-top-row">
+                        <h3 class="modal-title" style="color: var(--accent-green);">📜 КВИЗ: Немецкие традиции</h3>
+                        <button class="modal-close" onclick="document.getElementById('quizModal').classList.add('hidden')">×</button>
+                    </div>
+                    <div id="quizQuestionsContainer" style="max-height: 65vh; overflow-y: auto; padding-right: 5px;">
+                        </div>
+                    <p id="quizScoreDisplay" class="muted" style="margin-top: 15px; font-weight: bold;"></p>
+                    <p id="quizFinalMessage" class="muted" style="margin-top: 15px; font-weight: bold; font-size: 1.1rem; color: var(--accent-red);"></p>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', quizModalHTML);
+    }
+    
+    // Инициализация состояния
+    quizState.currentQuestionIndex = 0;
+    quizState.correctCount = 0;
+    quizState.quizInProgress = true;
+    
+    document.getElementById('quizModal').classList.remove('hidden');
+    document.getElementById('quizFinalMessage').innerHTML = '';
+
+    window.renderCurrentQuestion();
+};
+
+window.renderCurrentQuestion = () => {
+    const container = document.getElementById('quizQuestionsContainer');
+    const scoreDisplay = document.getElementById('quizScoreDisplay');
+    
+    if (quizState.currentQuestionIndex >= quizState.totalQuestions) {
+        window.finalizeQuiz();
+        return;
+    }
+
+    const q = QUIZ_DATA[quizState.currentQuestionIndex];
+    const shuffledAnswers = [...q.answers].sort(() => Math.random() - 0.5);
+
+    scoreDisplay.innerHTML = `Вопрос ${quizState.currentQuestionIndex + 1} из ${quizState.totalQuestions} (Верно: <span style="color: var(--accent-gold);">${quizState.correctCount}</span>)`;
+
+    let buttonsHtml = shuffledAnswers.map((answer) => {
+        // Экранируем одинарные кавычки в ответе для корректной передачи в JS
+        const escapedAnswer = answer.replace(/'/g, "\\'"); 
+        
+        return `<button 
+                    class="quiz-answer-btn start-button" 
+                    data-answer="${answer}" 
+                    onclick="window.handleQuizAnswer(this, '${escapedAnswer}')"
+                >
+                    ${answer}
+                </button>`;
+    }).join('');
+
+    container.innerHTML = `
+        <div class="quiz-question-box">
+            <p style="font-weight: 900; font-size: 1.3rem; margin-bottom: 20px;">${q.question}</p>
+            <div class="quiz-buttons-grid">
+                ${buttonsHtml}
+            </div>
+        </div>
+    `;
+};
+
+window.handleQuizAnswer = (button, selectedAnswer) => {
+    if (!quizState.quizInProgress) return;
+    
+    const currentQuestion = QUIZ_DATA[quizState.currentQuestionIndex];
+    const isCorrect = (selectedAnswer === currentQuestion.correct);
+    
+    // 1. Блокируем все кнопки, чтобы предотвратить повторный клик
+    document.querySelectorAll('.quiz-answer-btn').forEach(btn => btn.disabled = true);
+    
+    // 2. Визуальная обратная связь
+    if (isCorrect) {
+        quizState.correctCount++;
+        button.classList.add('correct');
+    } else {
+        button.classList.add('incorrect');
+        // Подсвечиваем правильный ответ
+        document.querySelectorAll('.quiz-answer-btn').forEach(btn => {
+            if (btn.dataset.answer === currentQuestion.correct) {
+                btn.classList.add('correct-flash');
+            }
+        });
+    }
+
+    // 3. Переход к следующему вопросу
+    quizState.currentQuestionIndex++;
+    
+    setTimeout(window.renderCurrentQuestion, 1500);
+};
+
+window.finalizeQuiz = async () => {
+    const resultMsg = document.getElementById('quizFinalMessage');
+    const container = document.getElementById('quizQuestionsContainer');
+    const total = quizState.totalQuestions;
+    const correct = quizState.correctCount;
+    const required = Math.ceil(total / 2); // Большинство = 4 из 7
+    const passed = correct >= required;
+    
+    quizState.quizInProgress = false; // Квиз окончен
+    
+    const freezeDurationMs = 2 * 60 * 1000; 
+    
+    // Проверка результата
+    if (passed) {
+        resultMsg.innerHTML = `<span style="color: var(--accent-green);">🎉 УСПЕХ! ${correct} из ${total} верных ответов. Задание №4 выполнено!</span>`;
+        
+        // Автоматическое выполнение задания №4
+        const taskId = 4;
+        const taskElement = document.querySelector(`input[type="checkbox"][onclick*="window.toggleTask(${taskId}"]`);
+        if (taskElement && !taskElement.checked) {
+            taskElement.checked = true;
+            await window.toggleTask(taskId, taskElement); // Выполняем задачу через лидера
+        }
+        
+    } else {
+        // ПРОВАЛ - ШТРАФ
+        resultMsg.innerHTML = `
+            <span style="color: var(--accent-red);">❌ ПРОВАЛ! ${correct} из ${total} верных.</span>
+            <br>Ваша команда будет ЗАМОРОЖЕНА на 2 минуты!
+        `;
+        
+        // Вызов функции заморозки (реализована в engine.js)
+        await updateTeamFreezeStatus(state.me.team_id, freezeDurationMs);
+    }
+    
+    // Финальная кнопка закрытия модального окна
+    container.innerHTML = `
+        <div style="text-align: center; margin-top: 20px;">
+            <button class="start-button" onclick="document.getElementById('quizModal').classList.add('hidden'); renderMarkers();">
+                ЗАКРЫТЬ
+            </button>
+        </div>
+    `;
+};
+
+
+// ================= ОБМЕН ЧЕРЕЗ МОДАЛЬНОЕ ОКНО (остается без изменений) =================
 
 window.openTradeModal = () => {
   if (!['leader', 'Negotiator'].includes(state.me.role)) {
@@ -726,7 +1022,7 @@ window.rejectTrade = async (id) => {
 window.closeTradeModal = () => document.getElementById('tradeModal').classList.add('hidden');
 window.closeIncomingTrades = () => document.getElementById('incomingTradesModal').classList.add('hidden');
 
-// ================= FREEZE & EFFECTS =================
+// ================= FREEZE & EFFECTS (остается без изменений) =================
 
 function checkFreezeState() {
     const isFrozen = state.currentTeam?.frozen_until && new Date(state.currentTeam.frozen_until) > new Date();
@@ -754,6 +1050,20 @@ function createSnowEffect() {
         f.forEach(p=>{ctx.moveTo(p.x,p.y);ctx.arc(p.x,p.y,p.s,0,Math.PI*2);p.y+=p.s/2;if(p.y>H)p.y=-5;});ctx.fill();
     },40);
 }
+
+// ----------------------------------------------------
+// MAKE FUNCTIONS GLOBALLY ACCESSIBLE (Fixes ReferenceError from HTML onclick)
+// ----------------------------------------------------
+window.renderMarkers = renderMarkers;
+window.showPopup = showPopup;
+window.showMissionPopup = showMissionPopup;
+window.openQuizModal = openQuizModal;
+window.handleQuizAnswer = handleQuizAnswer;
+window.finalizeQuiz = finalizeQuiz;
+window.toggleTask = window.toggleTask; // Уже объявлено выше, но для чистоты
+window.locateMe = () => { /* Placeholder for Locate button logic */ renderMarkers(); }; 
+window.openItemsGuide = openItemsGuide;
+window.closeItemsGuide = closeItemsGuide;
 
 // Start Game
 initGame().catch(console.error);

@@ -17,10 +17,8 @@ export const state = {
 };
 
 // ===== CONSTANTS =====
-// 1. Изменено: Кульдаун гаджетов на 2 минуты (2 * 60 * 1000)
 export const GADGET_COOLDOWN_MS = 2 * 60 * 1000;
-// 2. Изменено: Кульдаун поиска в сугробе на 1 минуту 50 секунд (110 * 1000)
-export const SCAVENGER_COOLDOWN_MS = (1 * 60 + 50) * 1000; 
+export const SCAVENGER_COOLDOWN_MS = (1 * 60 + 50) * 1000; // 1 минута 50 секунд
 
 export const ROLES_DATA = {
     Explorer: 'Исследователь', Guardian: 'Хранитель', Saboteur: 'Диверсант',
@@ -34,8 +32,70 @@ export const CRAFT_RECIPES = [
 ];
 
 // ПУЛЫ ПРЕДМЕТОВ ДЛЯ КЛАДОИСКАТЕЛЯ
-const GADGET_POOL = [11, 12, 13]; // ID готовых гаджетов
-const RESOURCE_POOL = [1, 2, 3, 4, 5]; // ID базовых ресурсов (ингредиенты)
+const GADGET_POOL = [11, 12, 13]; 
+const RESOURCE_POOL = [1, 2, 3, 4, 5]; 
+
+// ===== QUIZ DATA (ДАННЫЕ ДЛЯ ЗАДАНИЯ №4) =====
+export const QUIZ_DATA = [
+    { 
+        question: "Откуда появились рождественские ярмарки?",
+        answers: ["Из античного Рима", "Из позднесредневековых торговых ярмарок", "Их придумали в 20 веке", "Их создали дети, чтобы получать подарки"],
+        correct: "Из позднесредневековых торговых ярмарок"
+    },
+    { 
+        question: "Что означает слово «Адвент»?",
+        answers: ["Рождественская выпечка", "Пришествие / приход", "Семейный ужин", "Ярмарка"],
+        correct: "Пришествие / приход"
+    },
+    { 
+        question: "Сколько свечей на традиционном Adventskranz?",
+        answers: ["3", "4", "5", "24"],
+        correct: "4" 
+    },
+    { 
+        question: "Где появились первые стеклянные ёлочные игрушки?",
+        answers: ["В Берлине", "В Лондоне", "В Лауше (Тюрингия)", "В Баварии"],
+        correct: "В Лауше (Тюрингия)"
+    },
+    { 
+        question: "Что раньше дарили детям как праздничную сладость?",
+        answers: ["Пастилу", "Жареный миндаль (Gebrannte Mandeln)", "Жвачку", "Шоколадные яйца"],
+        correct: "Жареный миндаль (Gebrannte Mandeln)"
+    },
+    { 
+        question: "Что символизирует форма рождественского штоллена?",
+        answers: ["Слёзы ангелов", "Заснеженные горы", "Завёрнутого младенца Иисуса", "Корону королей"],
+        correct: "Завёрнутого младенца Иисуса"
+    },
+    { 
+        question: "Для чего используют фигурки Räuchermännchen?",
+        answers: ["Как музыкальную игрушку", "Для хранения конфет", "Как держатель для благовоний", "Как подсвечник"],
+        correct: "Как держатель для благовоний"
+    }
+];
+
+// ===== СТРУКТУРА МАРШРУТОВ (ССЫЛАЕТСЯ НА NAME в map_points) =====
+export const MISSION_PATH_STRUCTURE = {
+    // Команды 101, 103: Маршрут A
+    '101_103': [ 
+        {taskId: 1, stallName: 'Палатка №154 (Миссия 1)'},
+        {taskId: 2, stallName: 'Палатка №40 (Миссия 2)'},
+        {taskId: 3, stallName: 'Палатка №1 (Миссия 3)'},
+        {taskId: 4, stallName: 'Палатка №135 (Миссия 4)'},
+        {taskId: 5, stallName: 'Палатка №171 (Миссия 5)'},
+        {taskId: 6, stallName: 'Палатка №409 (ФИНАЛ)'},
+    ],
+    // Команды 102, 104: Маршрут B
+    '102_104': [ 
+        {taskId: 1, stallName: 'Палатка №162 (Миссия 1)'},
+        {taskId: 2, stallName: 'Палатка №51 (Миссия 2)'},
+        {taskId: 3, stallName: 'Палатка №25 (Миссия 3)'},
+        {taskId: 4, stallName: 'Палатка №170 (Миссия 4)'},
+        {taskId: 5, stallName: 'Палатка №70 (Миссия 5)'},
+        {taskId: 6, stallName: 'Палатка №325 (ФИНАЛ)'},
+    ],
+};
+
 
 // ===== API FUNCTIONS (CORE) =====
 
@@ -86,21 +146,21 @@ export async function fetchAllTeamsData() {
     }
 }
 
-// НОВАЯ ФУНКЦИЯ: Загрузка статических точек с карты из БД
+// НОВАЯ ФУНКЦИЯ: Загрузка всех точек карты из БД (включая миссии)
 export async function fetchStaticMapPoints() {
     const { data, error } = await supabase.from('map_points').select('*');
     if (error) {
         console.error("Error fetching map points:", error);
         return [];
     }
-    // Преобразование lat/lng (из БД) в x/y (0-100, используемые на карте)
     return data.map(p => ({
-        id: p.id.toString(), // ID должен быть строкой для mapMarkers
+        id: p.id.toString(), 
         type: p.type,
-        x: p.lng,
-        y: p.lat,
+        x: p.lng, // lng -> X
+        y: p.lat, // lat -> Y
         title: p.name,
         desc: p.description,
+        icon: p.icon 
     }));
 }
 
@@ -126,6 +186,21 @@ export async function updateTaskAndInventory(teamId, newTasks, newInventory) {
         return { success: false, error: error.message };
     }
     return { success: true };
+}
+
+// --- ФУНКЦИЯ ДЛЯ ЗАМОРОЗКИ (ИСПРАВЛЕНАЯ ДЛЯ ЭКСПОРТА) ---
+export async function updateTeamFreezeStatus(teamId, durationMs) {
+    const freezeUntil = new Date(Date.now() + durationMs).toISOString();
+    
+    const { error } = await supabase.from('teams')
+        .update({ frozen_until: freezeUntil })
+        .eq('id', teamId);
+        
+    if (error) {
+        console.error('Freeze Status Update Error:', error);
+        return { success: false, message: error.message };
+    }
+    return { success: true, freezeUntil };
 }
 
 
@@ -200,7 +275,7 @@ export async function scavengeItemLogic() {
 
     if (error) {
         console.error('Scavenge update error:', error);
-        return { success: false, message: 'Ошибка при сохранении инвентаря: ' + error.message };
+        return { success: false, message: error.message };
     }
     
     // Обновляем локальный стейт для быстрого ответа
@@ -231,7 +306,7 @@ export function setupRealtimeListeners(onMyTeamUpdate, onGlobalUpdate) {
         .subscribe();
 }
 
-// ===== TRADE SYSTEM FUNCTIONS =====
+// ===== TRADE SYSTEM FUNCTIONS (остается без изменений) =====
 
 export async function sendTradeRequest(toTeamId, offerItemId, requestItemId) {
   // Проверка: есть ли предмет у отправителя
