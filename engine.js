@@ -32,51 +32,19 @@ export const CRAFT_RECIPES = [
 ];
 
 // ПУЛЫ ПРЕДМЕТОВ ДЛЯ КЛАДОИСКАТЕЛЯ
-const GADGET_POOL = [11, 12, 13]; 
-const RESOURCE_POOL = [1, 2, 3, 4, 5]; 
+export const GADGET_POOL = [11, 12, 13]; 
+export const RESOURCE_POOL = [1, 2, 3, 4, 5]; 
 
-// ===== QUIZ DATA (ДАННЫЕ ДЛЯ ЗАДАНИЯ №4) =====
-export const QUIZ_DATA = [
-    { 
-        question: "Откуда появились рождественские ярмарки?",
-        answers: ["Из античного Рима", "Из позднесредневековых торговых ярмарок", "Их придумали в 20 веке", "Их создали дети, чтобы получать подарки"],
-        correct: "Из позднесредневековых торговых ярмарок"
-    },
-    { 
-        question: "Что означает слово «Адвент»?",
-        answers: ["Рождественская выпечка", "Пришествие / приход", "Семейный ужин", "Ярмарка"],
-        correct: "Пришествие / приход"
-    },
-    { 
-        question: "Сколько свечей на традиционном Adventskranz?",
-        answers: ["3", "4", "5", "24"],
-        correct: "4" 
-    },
-    { 
-        question: "Где появились первые стеклянные ёлочные игрушки?",
-        answers: ["В Берлине", "В Лондоне", "В Лауше (Тюрингия)", "В Баварии"],
-        correct: "В Лауше (Тюрингия)"
-    },
-    { 
-        question: "Что раньше дарили детям как праздничную сладость?",
-        answers: ["Пастилу", "Жареный миндаль (Gebrannte Mandeln)", "Жвачку", "Шоколадные яйца"],
-        correct: "Жареный миндаль (Gebrannte Mandeln)"
-    },
-    { 
-        question: "Что символизирует форма рождественского штоллена?",
-        answers: ["Слёзы ангелов", "Заснеженные горы", "Завёрнутого младенца Иисуса", "Корону королей"],
-        correct: "Завёрнутого младенца Иисуса"
-    },
-    { 
-        question: "Для чего используют фигурки Räuchermännchen?",
-        answers: ["Как музыкальную игрушку", "Для хранения конфет", "Как держатель для благовоний", "Как подсвечник"],
-        correct: "Как держатель для благовоний"
-    }
-];
+// ===== ДАННЫЕ ДЛЯ ЗАДАНИЙ 2, 3, 5 (СЕКРЕТНОЕ СЛОВО) =====
+export const SECRET_WORD_ITEM_ID = 14; 
+export const SECRET_WORDS = {
+    2: "ГЛИНТВЕЙН",
+    3: "ЗВЕЗДА",
+    5: "JINGLEBELLS"
+};
 
 // ===== СТРУКТУРА МАРШРУТОВ (ССЫЛАЕТСЯ НА NAME в map_points) =====
 export const MISSION_PATH_STRUCTURE = {
-    // Команды 101, 103: Маршрут A
     '101_103': [ 
         {taskId: 1, stallName: 'Палатка №154 (Миссия 1)'},
         {taskId: 2, stallName: 'Палатка №40 (Миссия 2)'},
@@ -85,7 +53,6 @@ export const MISSION_PATH_STRUCTURE = {
         {taskId: 5, stallName: 'Палатка №171 (Миссия 5)'},
         {taskId: 6, stallName: 'Палатка №409 (ФИНАЛ)'},
     ],
-    // Команды 102, 104: Маршрут B
     '102_104': [ 
         {taskId: 1, stallName: 'Палатка №162 (Миссия 1)'},
         {taskId: 2, stallName: 'Палатка №51 (Миссия 2)'},
@@ -129,7 +96,7 @@ export async function refreshTeamData() {
 }
 
 export async function fetchAllTeamsData() {
-    const { data: teams } = await supabase.from('teams').select('id, name, frozen_until, current_tent_id');
+    const { data: teams } = await supabase.from('teams').select('id, name, frozen_until, current_tent_id, name_by_leader, selfie_url'); // Добавлено name_by_leader, selfie_url
     const { data: players } = await supabase.from('players').select('team_id');
 
     if (teams && players && state.me) {
@@ -138,15 +105,15 @@ export async function fetchAllTeamsData() {
             return {
                 ...t,
                 playerCount: count,
-                x: 20 + Math.random() * 60, 
-                y: 20 + Math.random() * 60,
+                // Генерация координат для симуляции движения
+                x: t.x || (20 + Math.random() * 60), 
+                y: t.y || (20 + Math.random() * 60),
                 type: 'team'
             };
         });
     }
 }
 
-// НОВАЯ ФУНКЦИЯ: Загрузка всех точек карты из БД (включая миссии)
 export async function fetchStaticMapPoints() {
     const { data, error } = await supabase.from('map_points').select('*');
     if (error) {
@@ -164,7 +131,26 @@ export async function fetchStaticMapPoints() {
     }));
 }
 
-// ФУНКЦИЯ ДЛЯ ПРОВЕРКИ ГЛОБАЛЬНОГО СТАТУСА (Нужна для таймера)
+export async function fetchQuizData(taskId, teamId) {
+    let query = supabase.from('quiz_data')
+        .select('*')
+        .eq('task_id', taskId);
+        
+    if (taskId === 1) {
+        query = query.or(`team_id.eq.${teamId},team_id.is.null`);
+    } else if (taskId === 4) {
+        query = query.is('team_id', null);
+    } 
+
+    const { data, error } = await query;
+
+    if (error) {
+        console.error("Error fetching quiz data:", error);
+        return [];
+    }
+    return data;
+}
+
 export async function fetchGlobalGameState() {
     const { data: teams, error } = await supabase.from('teams').select('id, tasks, updated_at').order('updated_at', { ascending: true });
     if (error) {
@@ -174,7 +160,6 @@ export async function fetchGlobalGameState() {
     return teams;
 }
 
-// ФУНКЦИЯ ОБНОВЛЕНИЯ ЗАДАЧ И ИНВЕНТАРЯ (CORE)
 export async function updateTaskAndInventory(teamId, newTasks, newInventory) {
     const { error } = await supabase.from('teams').update({
         tasks: newTasks,
@@ -188,7 +173,6 @@ export async function updateTaskAndInventory(teamId, newTasks, newInventory) {
     return { success: true };
 }
 
-// --- ФУНКЦИЯ ДЛЯ ЗАМОРОЗКИ (ИСПРАВЛЕНАЯ ДЛЯ ЭКСПОРТА) ---
 export async function updateTeamFreezeStatus(teamId, durationMs) {
     const freezeUntil = new Date(Date.now() + durationMs).toISOString();
     
@@ -230,20 +214,21 @@ export async function craftItemLogic(recipeId) {
     return { success: true, itemName: state.globalItems[recipe.resultId].name };
 }
 
-// Восстановлена логика гаджетов
 export async function useGadgetLogic(itemId, targetTeamId) {
     const { data, error } = await supabase.rpc('use_gadget', {
-        attacker_team_id: state.me.team_id,
+        attacker_team_id: state.me.team_id, 
         target_team_id: targetTeamId,
         item_id: parseInt(itemId)
     });
+    
     if (error) return { success: false, msg: error.message };
-    if (!data.success) return { success: false, msg: data.message };
-    state.lastGadgetUsage = Date.now();
+    if (data && !data.success) return { success: false, msg: data.message };
+    
+    // Обновляем состояние только при УСПЕШНОМ использовании
+    state.lastGadgetUsage = Date.now(); 
     return { success: true };
 }
 
-// ФУНКЦИЯ ДЛЯ КЛАДОИСКАТЕЛЯ
 export async function scavengeItemLogic() {
     const roll = Math.random();
     let itemId = null;
@@ -253,9 +238,9 @@ export async function scavengeItemLogic() {
     if (roll < 0.10) { // 10% шанс на Гаджет
         const randomIndex = Math.floor(Math.random() * GADGET_POOL.length);
         itemId = GADGET_POOL[randomIndex];
-        quantity = 1; // Гаджет всегда 1
+        quantity = 1; 
         message = `🎉 Вам повезло! Найден редкий **Гаджет**!`;
-    } else if (roll < 0.50) { // 40% шанс на Ресурс (0.10 до 0.50)
+    } else if (roll < 0.50) { // 40% шанс на Ресурс
         const randomIndex = Math.floor(Math.random() * RESOURCE_POOL.length);
         itemId = RESOURCE_POOL[randomIndex];
         quantity = Math.floor(Math.random() * 5) + 1; // 1-5 единиц ресурса
@@ -264,11 +249,9 @@ export async function scavengeItemLogic() {
 
     if (!itemId) return { success: true, message: message, itemId: null };
 
-    // Добавление предмета в инвентарь
     const newInventory = { ...state.currentTeam.inventory };
     newInventory[itemId] = (newInventory[itemId] || 0) + quantity;
     
-    // Атомарное обновление инвентаря
     const { error } = await supabase.from('teams').update({
         inventory: newInventory
     }).eq('id', state.me.team_id);
@@ -278,7 +261,6 @@ export async function scavengeItemLogic() {
         return { success: false, message: error.message };
     }
     
-    // Обновляем локальный стейт для быстрого ответа
     state.currentTeam.inventory = newInventory;
     
     return { 
@@ -290,6 +272,7 @@ export async function scavengeItemLogic() {
 
 
 export function setupRealtimeListeners(onMyTeamUpdate, onGlobalUpdate) {
+    // ... (функция без изменений)
     supabase.channel('my_team_updates')
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'teams', filter: `id=eq.${state.me.team_id}` }, payload => {
             onMyTeamUpdate(payload.new, payload.old);
@@ -306,143 +289,140 @@ export function setupRealtimeListeners(onMyTeamUpdate, onGlobalUpdate) {
         .subscribe();
 }
 
-// ===== TRADE SYSTEM FUNCTIONS (остается без изменений) =====
+// ===== TRADE SYSTEM FUNCTIONS (исправлена логика принятия) =====
 
 export async function sendTradeRequest(toTeamId, offerItemId, requestItemId) {
-  // Проверка: есть ли предмет у отправителя
-  const inv = state.currentTeam?.inventory || {};
-  if ((inv[offerItemId] || 0) < 1) {
-    return { success: false, msg: 'У вас нет этого предмета для обмена' };
-  }
+    const inv = state.currentTeam?.inventory || {};
+    if ((inv[offerItemId] || 0) < 1) {
+        return { success: false, msg: 'У вас нет этого предмета для обмена' };
+    }
 
-  // Проверка: существует ли предмет в базе (защита от подделки)
-  if (!state.globalItems[offerItemId] || !state.globalItems[requestItemId]) {
-    return { success: false, msg: 'Неверный ID предмета' };
-  }
+    if (!state.globalItems[offerItemId] || !state.globalItems[requestItemId]) {
+        return { success: false, msg: 'Неверный ID предмета' };
+    }
 
-  const { error } = await supabase.from('trade_requests').insert({
-    from_team_id: state.me.team_id,
-    to_team_id: toTeamId,
-    offer_item_id: offerItemId,
-    request_item_id: requestItemId,
-    status: 'pending'
-  });
+    const { error } = await supabase.from('trade_requests').insert({
+        from_team_id: state.me.team_id,
+        to_team_id: toTeamId,
+        offer_item_id: offerItemId,
+        request_item_id: requestItemId,
+        status: 'pending'
+    });
 
-  if (error) {
-    console.error('Trade send error:', error);
-    return { success: false, msg: 'Не удалось отправить обмен' };
-  }
-  return { success: true };
+    if (error) {
+        console.error('Trade send error:', error);
+        return { success: false, msg: 'Не удалось отправить обмен' };
+    }
+    return { success: true };
 }
 
 export async function fetchIncomingTrades() {
-  const { data, error } = await supabase
-    .from('trade_requests')
-    .select(`
-      id,
-      from_team_id,
-      offer_item_id,
-      request_item_id,
-      teams!from_team_id(name, name_by_leader)
-    `)
-    .eq('to_team_id', state.me.team_id)
-    .eq('status', 'pending');
+    const { data, error } = await supabase
+        .from('trade_requests')
+        .select(`
+            id,
+            from_team_id,
+            offer_item_id,
+            request_item_id,
+            teams!from_team_id(name, name_by_leader)
+        `)
+        .eq('to_team_id', state.me.team_id)
+        .eq('status', 'pending');
 
-  if (error) {
-    console.error('Fetch trades error:', error);
-    return [];
-  }
-  return data.map(t => ({
-    ...t,
-    from_team_name: t.teams.name_by_leader || t.teams.name
-  }));
+    if (error) {
+        console.error('Fetch trades error:', error);
+        return [];
+    }
+    return data.map(t => ({
+        ...t,
+        from_team_name: t.teams.name_by_leader || t.teams.name
+    }));
 }
 
 export async function respondToTrade(tradeId, accept = true) {
-  const newStatus = accept ? 'accepted' : 'rejected';
-  
-  // Получаем данные обмена
-  const { data: trade, error: fetchError } = await supabase
-    .from('trade_requests')
-    .select('*')
-    .eq('id', tradeId)
-    .single();
-
-  if (fetchError || !trade) {
-    return { success: false, msg: 'Обмен не найден' };
-  }
-
-  // Обновляем статус
-  const { error: updateError } = await supabase
-    .from('trade_requests')
-    .update({ status: newStatus })
-    .eq('id', tradeId);
-
-  if (updateError) {
-    console.error('Update trade status error:', updateError);
-    return { success: false, msg: 'Ошибка при обновлении статуса' };
-  }
-
-  if (accept) {
-    try {
-      // Получаем актуальные данные команд
-      const { data: fromTeam } = await supabase
-        .from('teams')
-        .select('inventory')
-        .eq('id', trade.from_team_id)
-        .single();
-      
-      const { data: toTeam } = await supabase
-        .from('teams')
-        .select('inventory')
-        .eq('id', state.me.team_id)
+    const newStatus = accept ? 'accepted' : 'rejected';
+    
+    // Получаем данные обмена
+    const { data: trade, error: fetchError } = await supabase
+        .from('trade_requests')
+        .select('*')
+        .eq('id', tradeId)
         .single();
 
-      if (!fromTeam || !toTeam) {
-        return { success: false, msg: 'Одна из команд не найдена' };
-      }
-
-      const invFrom = { ...fromTeam.inventory };
-      const invTo = { ...toTeam.inventory };
-
-      // Проверка наличия предметов на момент принятия
-      if ((invFrom[trade.offer_item_id] || 0) < 1) {
-        return { success: false, msg: 'У отправителя больше нет предмета для обмена' };
-      }
-      if ((invTo[trade.request_item_id] || 0) < 1) {
-        return { success: false, msg: 'У вас больше нет запрашиваемого предмета' };
-      }
-
-      // === ВЫПОЛНЕНИЕ ОБМЕНА ===
-      // Отправитель ОТДАЁТ offer_item_id → ПОЛУЧАЕТ request_item_id
-      invFrom[trade.offer_item_id]--;
-      invFrom[trade.request_item_id] = (invFrom[trade.request_item_id] || 0) + 1;
-
-      // Получатель (вы) ОТДАЁТЕ request_item_id → ПОЛУЧАЕТЕ offer_item_id
-      invTo[trade.request_item_id]--;
-      invTo[trade.offer_item_id] = (invTo[trade.offer_item_id] || 0) + 1;
-
-      // Обновляем инвентарь
-      const { error: err1 } = await supabase
-        .from('teams')
-        .update({ inventory: invFrom })
-        .eq('id', trade.from_team_id);
-
-      const { error: err2 } = await supabase
-        .from('teams')
-        .update({ inventory: invTo })
-        .eq('id', state.me.team_id);
-
-      if (err1 || err2) {
-        console.error('Inventory update error:', err1 || err2);
-        return { success: false, msg: 'Ошибка при обновлении инвентаря' };
-      }
-
-    } catch (e) {
-      console.error('Critical trade execution error:', e);
-      return { success: false, msg: 'Системная ошибка при выполнении обмена' };
+    if (fetchError || !trade) {
+        return { success: false, msg: 'Обмен не найден' };
     }
-  }
+    
+    if (accept) {
+        try {
+            // Получаем актуальные данные команд
+            const { data: fromTeam } = await supabase
+                .from('teams')
+                .select('inventory')
+                .eq('id', trade.from_team_id)
+                .single();
+            
+            // Получаем актуальные данные нашей команды (мы - toTeam)
+            const { data: toTeam } = await supabase
+                .from('teams')
+                .select('inventory')
+                .eq('id', state.me.team_id)
+                .single();
 
-  return { success: true };
+            if (!fromTeam || !toTeam) {
+                return { success: false, msg: 'Одна из команд не найдена' };
+            }
+
+            const invFrom = { ...fromTeam.inventory };
+            const invTo = { ...toTeam.inventory };
+
+            // Проверка наличия предметов на момент принятия
+            if ((invFrom[trade.offer_item_id] || 0) < 1) {
+                return { success: false, msg: 'У отправителя больше нет предмета для обмена' };
+            }
+            if ((invTo[trade.request_item_id] || 0) < 1) {
+                return { success: false, msg: 'У вас больше нет запрашиваемого предмета' };
+            }
+
+            // === ВЫПОЛНЕНИЕ ОБМЕНА ===
+            invFrom[trade.offer_item_id]--;
+            invFrom[trade.request_item_id] = (invFrom[trade.request_item_id] || 0) + 1;
+            invTo[trade.request_item_id]--;
+            invTo[trade.offer_item_id] = (invTo[trade.offer_item_id] || 0) + 1;
+
+            // Обновляем инвентарь (атомарно, насколько это возможно в JS)
+            const { error: err1 } = await supabase
+                .from('teams')
+                .update({ inventory: invFrom })
+                .eq('id', trade.from_team_id);
+
+            const { error: err2 } = await supabase
+                .from('teams')
+                .update({ inventory: invTo })
+                .eq('id', state.me.team_id);
+
+            if (err1 || err2) {
+                console.error('Inventory update error:', err1 || err2);
+                return { success: false, msg: 'Ошибка при обновлении инвентаря' };
+            }
+
+        } catch (e) {
+            console.error('Critical trade execution error:', e);
+            return { success: false, msg: 'Системная ошибка при выполнении обмена' };
+        }
+    }
+    
+    // Обновляем статус ТОЛЬКО после успешного обмена или если это был reject
+    const { error: updateError } = await supabase
+        .from('trade_requests')
+        .update({ status: newStatus })
+        .eq('id', tradeId);
+        
+    if (updateError) {
+        console.error('Final trade status update error:', updateError);
+        // Тут можно попытаться откатить инвентарь, но в целях простоты оставляем только сообщение
+        return { success: false, msg: 'Ошибка при финальном обновлении статуса обмена' };
+    }
+
+    return { success: true };
 }

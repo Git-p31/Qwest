@@ -15,6 +15,8 @@
     --stripe-color-1: #D90026; 
     --stripe-color-2: #620818;
     --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+    --accent-green-alpha: rgba(0, 214, 143, 0.2); 
+    --accent-red-alpha: rgba(217, 0, 38, 0.2);
 }
 
 * { box-sizing: border-box; font-family: var(--font-main); -webkit-tap-highlight-color: transparent; outline: none; }
@@ -197,9 +199,9 @@ h2 { color: var(--accent-gold); margin: 5px 0 15px 0; font-size: 1.1rem; text-tr
     position: relative; 
     z-index: 5; 
     border-radius: 20px; 
-    overflow: hidden; 
     border: 3px solid var(--accent-gold); 
     box-shadow: 0 0 30px rgba(255, 215, 0, 0.6);
+    overflow: hidden; /* Добавил, если не было */
 }
 
 #interactiveMap { width: 100%; height: 100%; }
@@ -421,9 +423,9 @@ body.frozen-mode #btnGuardianWarm { pointer-events: auto !important; opacity: 1 
 /* === TENT WAITING ANIMATION === */
 .tent-waiting { text-align: center; padding: 20px; }
 .loader-spinner { width: 40px; height: 40px; border: 4px solid #fff; border-top-color: var(--accent-gold); border-radius: 50%; margin: 0 auto 15px auto; animation: spin 1s linear infinite; }
-/* --- СТИЛИ ДЛЯ ИНТЕРАКТИВНОГО КВИЗА (ЗАДАНИЕ 4) --- */
+/* --- СТИЛИ ДЛЯ ОБНОВЛЕННОЙ ВИКТОРИНЫ (TASK 1 & 4) --- */
 
-.quiz-buttons-grid {
+.quiz-options-grid {
     display: grid;
     grid-template-columns: 1fr 1fr; /* Две колонки */
     gap: 10px;
@@ -431,44 +433,61 @@ body.frozen-mode #btnGuardianWarm { pointer-events: auto !important; opacity: 1 
 }
 
 .quiz-answer-btn {
-    padding: 15px 10px !important;
-    font-size: 0.95rem !important;
-    text-transform: none !important;
-    font-weight: 700;
-    border-radius: 10px !important;
-    background: rgba(40, 50, 70, 0.9) !important;
-    color: var(--text-main) !important;
-    transition: background 0.3s ease, border 0.3s ease;
-    box-shadow: none !important;
+    padding: 12px 10px;
+    font-size: 0.9rem;
+    text-transform: none;
+    font-weight: 600;
+    border-radius: 8px;
+    background: rgba(40, 50, 70, 0.9);
+    color: var(--text-main);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+    line-height: 1.2;
+    text-align: left; /* Для лучшего отображения длинных ответов */
 }
 
 .quiz-answer-btn:hover:not(:disabled) {
-    background: rgba(60, 75, 100, 0.9) !important;
-    transform: none !important;
+    background: rgba(60, 75, 100, 0.9);
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.15); /* Добавляем тень для "красоты" */
 }
 
-/* Обратная связь: Правильный ответ */
-.quiz-answer-btn.correct {
+/* Выбранный ответ */
+.quiz-answer-btn.selected {
+    background: var(--accent-gold);
+    color: #000;
+    font-weight: 800;
+    border-color: #FFF;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.5); /* Выделение выбранного ответа */
+    transform: scale(1.0); /* Отключаем любое масштабирование */
+}
+
+/* Обратная связь */
+.quiz-answer-btn.correct-flash { /* Правильный ответ */
     background: var(--accent-green) !important;
-    border: 3px solid #FFF !important;
+    border: 2px solid #FFF !important;
     color: #000 !important;
     animation: correctFlash 0.5s;
-}
-.quiz-answer-btn.correct-flash { /* Подсветка правильного, если игрок ошибся */
-    background: rgba(0, 214, 143, 0.5) !important;
-    border: 2px solid var(--accent-green) !important;
+    box-shadow: 0 0 20px var(--accent-green);
 }
 
-
-/* Обратная связь: Неправильный ответ */
-.quiz-answer-btn.incorrect {
+.quiz-answer-btn.incorrect { /* Неправильно выбранный ответ */
     background: var(--accent-red) !important;
-    border: 3px solid #FFF !important;
+    border: 2px solid #FFF !important;
     color: #000 !important;
-    animation: incorrectShake 0.5s;
+    box-shadow: 0 0 20px var(--accent-red);
 }
 
-/* Ключевые анимации */
+/* Для текстового ввода */
+.quiz-text-input {
+    background: #0f1218 !important;
+    border: 1px solid #333 !important;
+    color: #fff !important;
+    padding: 15px !important;
+    font-size: 1.2rem !important;
+    text-align: center !important;
+}
+
 @keyframes correctFlash {
     0%, 100% { box-shadow: 0 0 10px var(--accent-green); }
     50% { box-shadow: 0 0 20px var(--accent-green); }

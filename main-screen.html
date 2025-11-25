@@ -135,20 +135,20 @@
 
     <div id="tradeModal" class="modal-backdrop hidden">
         <div class="modal-content">
-             <div class="modal-header-strip"></div>
-             <div class="modal-top-row">
-                <h3 class="modal-title">💛 ПРЕДЛОЖИТЬ ОБМЕН</h3>
-                <button class="modal-close" onclick="window.closeTradeModal()">×</button>
-            </div>
-            <label class="label-accent">1. Кому:</label> 
-            <select id="tradeTargetTeam" class="modal-input"></select>
-            <label class="label-accent" style="color:var(--accent-green)">2. Отдаем:</label> 
-            <select id="tradeOfferSelect" class="modal-input"></select>
-            <label class="label-accent" style="color:var(--accent-red)">3. Просим:</label> 
-            <select id="tradeRequestSelect" class="modal-input"></select>
-            <button class="start-button" onclick="window.sendTradeRequest()">Отправить</button>
-        </div>
-    </div>  
+               <div class="modal-header-strip"></div>
+               <div class="modal-top-row">
+                 <h3 class="modal-title">💛 ПРЕДЛОЖИТЬ ОБМЕН</h3>
+                 <button class="modal-close" onclick="window.closeTradeModal()">×</button>
+             </div>
+             <label class="label-accent">1. Кому:</label> 
+             <select id="tradeTargetTeam" class="modal-input"></select>
+             <label class="label-accent" style="color:var(--accent-green)">2. Отдаем:</label> 
+             <select id="tradeOfferSelect" class="modal-input"></select>
+             <label class="label-accent" style="color:var(--accent-red)">3. Просим:</label> 
+             <select id="tradeRequestSelect" class="modal-input"></select>
+             <button class="start-button" onclick="window.sendTradeRequest()">Отправить</button>
+         </div>
+    </div>  
 
     <div id="incomingTradesModal" class="modal-backdrop hidden">
         <div class="modal-content">
@@ -158,7 +158,7 @@
                 <button class="modal-close" onclick="window.closeIncomingTrades()">×</button>
             </div>
             <div id="incomingTradesList"></div>
-        </div>  
+        </div>  
     </div>
 
     <div id="endGameModal" class="modal-backdrop hidden" style="z-index: 20000;">
@@ -191,6 +191,79 @@
                 <button class="modal-close" onclick="document.getElementById('craftModal').classList.add('hidden')">×</button>
             </div>
             <div id="craftRecipesList" style="max-height: 60vh; overflow-y: auto; padding-right: 5px;"></div>
+        </div>
+    </div>
+
+    <div id="quizModal" class="modal-backdrop hidden">
+        <div class="modal-content">
+            <div class="modal-header-strip" style="background: repeating-linear-gradient(90deg, var(--accent-gold), var(--accent-gold) 20px, #b8860b 20px, #b8860b 40px);"></div>
+            <div class="modal-top-row">
+                <h3 class="modal-title" id="quizModalTitle" style="color: var(--accent-gold);">📜 КВИЗ</h3>
+                <button class="modal-close" onclick="document.getElementById('quizModal').classList.add('hidden')">×</button>
+            </div>
+            
+            <div id="quizQuestionsContainer" style="max-height: 60vh; overflow-y: auto; padding-right: 5px;">
+                </div>
+
+            <p id="quizScoreDisplay" class="muted" style="margin-top: 15px; font-weight: bold;"></p>
+            <p id="quizFinalMessage" class="muted" style="margin-top: 5px; font-weight: bold; font-size: 1.1rem; color: var(--accent-red);"></p>
+            
+            <button id="quizSubmitBtn" class="start-button hidden" style="margin-top: 20px;">
+                ПРОВЕРИТЬ ОТВЕТЫ
+            </button>
+            </div>
+    </div>
+    
+    <div id="secretWordModal" class="modal-backdrop hidden">
+        <div class="modal-content">
+            <div class="modal-header-strip" style="background: linear-gradient(90deg, #f1fa8c, #bd93f9);"></div>
+            <div class="modal-top-row">
+                <h3 class="modal-title" id="swModalTitle">ЗАДАНИЕ С ФОТО/ВИДЕО</h3>
+                <button class="modal-close" onclick="document.getElementById('secretWordModal').classList.add('hidden')">×</button>
+            </div>
+            
+            <div id="swModalIcon" style="font-size: 4rem; margin: 10px 0; text-align: center;">📸</div>
+            
+            <div id="swModalDesc" class="interaction-desc-text"></div>
+            
+            <a id="swModalTelegramLink" href="#" target="_blank" class="start-button" style="margin-top: 15px; background: #0088CC; color: white;">
+                ОТПРАВИТЬ В TELEGRAM ГРУППУ
+            </a>
+
+            <label class="label-accent" style="margin-top: 25px;">Введите Секретное Слово (от организатора):</label>
+            <input type="text" id="secretWordInput" class="modal-input" placeholder="Введите слово здесь" style="text-align: center;">
+            
+            <p id="swModalStatus" class="muted" style="margin: 10px 0; font-weight: bold;"></p>
+            
+            <button id="swModalSubmitBtn" class="start-button" onclick="window.handleSecretWordSubmit()">
+                ПОДТВЕРДИТЬ
+            </button>
+        </div>
+    </div>
+
+    <div id="ticTacToeModal" class="modal-backdrop hidden">
+        <div class="modal-content">
+            <div class="modal-header-strip" style="background: repeating-linear-gradient(45deg, #FF5555, #FF5555 10px, #8B0000 10px, #8B0000 20px);"></div>
+            <div class="modal-top-row">
+                <h3 class="modal-title" style="color: var(--accent-red);">⚔️ КРЕСТИКИ-НОЛИКИ (ФИНАЛ)</h3>
+                <button class="modal-close" onclick="document.getElementById('ticTacToeModal').classList.add('hidden')">×</button>
+            </div>
+            
+            <div id="tttSelectOpponent">
+                <p class="muted" style="margin-bottom: 15px;">Выберите команду, чтобы бросить ей вызов. **Они не смогут отказаться.**</p>
+                <select id="tttTargetTeam" class="modal-input" style="margin-bottom: 20px;"></select>
+                <button id="tttBtnChallenge" class="start-button" onclick="window.sendGameChallenge()">
+                    ОТПРАВИТЬ ВЫЗОВ
+                </button>
+            </div>
+            
+            <div id="tttGameContainer" class="hidden" style="text-align: center;">
+                <p id="tttStatusMessage" style="font-size: 1.1rem; color: var(--accent-gold); margin-bottom: 15px;">Ожидаем принятия вызова командой...</p>
+                <div id="gameBoardPlaceholder" style="width: 200px; height: 200px; margin: 15px auto; border: 2px solid #555; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center;">
+                    Игра в Крестики-нолики (UI Placeholder)
+                </div>
+                <p class="muted" style="margin-top: 10px;">В случае проигрыша, ваша команда будет заморожена на 2 минуты.</p>
+            </div>
         </div>
     </div>
 
