@@ -3,7 +3,9 @@ import {
     authPlayer, refreshTeamData, fetchAllTeamsData, 
     setTentStatus, clearTentStatus, craftItemLogic, useGadgetLogic, setupRealtimeListeners,
     updateTaskAndInventory, fetchGlobalGameState,
-    sendTradeRequest, fetchIncomingTrades, respondToTrade
+    sendTradeRequest, fetchIncomingTrades, respondToTrade,
+    scavengeItemLogic, SCAVENGER_COOLDOWN_MS,
+    fetchStaticMapPoints // <-- ИМПОРТ ДЛЯ ЗАГРУЗКИ ТОЧЕК КАРТЫ ИЗ БД
 } from './engine.js';
 
 // ===== UI CONFIG and GLOBALS =====
@@ -14,18 +16,20 @@ const TEAMS_UI_CONFIG = {
     104: { color: '#bd93f9', symbol: '🎅' },
 };
 
-const STATIC_MAP_ITEMS = [
-  {id: 'tent1', type:'tent', x: 28, y: 62, title: 'Палатка A (Север)', desc: 'Точка обмена ресурсами.'},
-  {id: 'tent2', type:'tent', x: 60, y: 62, title: 'Палатка B (Юг)', desc: 'Точка обмена ресурсами.'},
-  {id: 'npc1', type:'npc', x: 45, y: 38, title: 'Инфо-центр', desc: 'Квесты.'},
-  {id: 'npc2', type:'npc', x: 52, y: 46, title: 'Квест-Мастер', desc: 'Задания.'},
-];
+// ХАРДКОД STATIC_MAP_ITEMS УДАЛЕН. Точки будут загружены в staticMapPoints.
 
 let map = null;
 let mapMarkers = {};
 let wasFrozen = false;
 let timerUiInterval = null;
 let hasShownVictory = false;
+
+// ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ КАРТЫ И КЛАДОИСКАТЕЛЯ
+let staticMapPoints = []; // Точки (Tent, NPC) из БД
+let dynamicSnowPiles = []; // Динамические сугробы
+let snowSpawnInterval = null;
+let lastScavengeTime = Number(localStorage.getItem('lastScavengeTime')) || 0; 
+const MAX_SNOW_PILES = 5;
 
 // ===== INITIALIZATION & CORE =====
 async function initGame() {
@@ -43,12 +47,17 @@ async function initGame() {
         document.getElementById('btnShowTrades')?.classList.remove('hidden');
     }
 
+    // ЗАГРУЗКА СТАТИЧЕСКИХ ТОЧЕК КАРТЫ ИЗ БД
+    staticMapPoints = await fetchStaticMapPoints();
+    
     await fetchAllTeamsData();
     await refreshTeamData();
     
     initMapLogic();
     renderGameInterface();
     createSnowEffect();
+    
+    startSnowPileSpawning(); // ЗАПУСК СПАВНА СУГРОБОВ
 
     setupRealtimeListeners(
         async (newTeam, oldTeam) => {
@@ -293,6 +302,33 @@ async function checkGlobalGameState() {
 
 // ================= TENTS & MAP (CORE) =================
 
+function startSnowPileSpawning() {
+    if(snowSpawnInterval) clearInterval(snowSpawnInterval);
+    
+    const spawnPile = () => {
+        if (dynamicSnowPiles.length < MAX_SNOW_PILES) {
+            const newPile = {
+                id: 'snow_' + Date.now() + Math.floor(Math.random() * 1000),
+                type: 'snow_pile',
+                x: 15 + Math.random() * 70, // Random X (15-85)
+                y: 15 + Math.random() * 70, // Random Y (15-85)
+                title: 'Сугроб',
+                desc: 'Здесь может быть что-то ценное, если поторопиться...',
+            };
+            dynamicSnowPiles.push(newPile);
+            renderMarkers(); 
+        }
+    };
+    
+    // Изначальный спавн
+    for(let i = 0; i < Math.floor(Math.random() * MAX_SNOW_PILES) + 1; i++) {
+        spawnPile();
+    }
+
+    // Интервал для респавна (раз в 30 секунд)
+    snowSpawnInterval = setInterval(spawnPile, 30000); 
+}
+
 function initMapLogic() {
     if (map) map.remove();
     map = L.map('interactiveMap', { crs: L.CRS.Simple, minZoom: -2, maxZoom: 2, zoomControl: false, attributionControl: false });
@@ -314,8 +350,13 @@ function initMapLogic() {
 function renderMarkers() {
     if(!map) return;
     
-    STATIC_MAP_ITEMS.forEach(item => updateMarker(item.id, item.type, item.x, item.y, item.title, item));
+    // 1. Статические точки (Tents, NPC) из БД
+    staticMapPoints.forEach(item => updateMarker(item.id, item.type, item.x, item.y, item.title, item, item.icon));
     
+    // 2. Динамические сугробы
+    dynamicSnowPiles.forEach(item => updateMarker(item.id, 'snow_pile', item.x, item.y, item.title, item, '🧤'));
+    
+    // 3. Другие игроки и вы
     state.otherTeams.forEach(t => {
         const symbol = TEAMS_UI_CONFIG[t.id]?.symbol || '👥';
         updateMarker('team_'+t.id, 'team', t.x, t.y, `${t.name}`, { title: t.name, desc: `Игроков: ${t.playerCount}` }, symbol);
@@ -328,13 +369,17 @@ function updateMarker(id, type, x, y, label, data, customSymbol) {
     const loc = [1500 - ((y / 100) * 1500), (x / 100) * 2000];
     let symbol = '📍';
     if(type === 'tent') symbol = '⛺';
+    if(type === 'npc') symbol = '👤';
+    if(type === 'snow_pile') symbol = '❄️';
     if(type === 'me') symbol = '🔴';
     if(customSymbol) symbol = customSymbol;
 
     const html = `<div class="marker ${type}"><div class="pin"><div>${symbol}</div></div><div class="label">${label}</div></div>`;
     const icon = L.divIcon({ className: 'custom-leaflet-icon', html: html, iconSize: [40, 60], iconAnchor: [20, 50] });
 
-    if (mapMarkers[id]) mapMarkers[id].setLatLng(loc);
+    // Очищаем старый маркер перед обновлением, если он уже не "сугроб", чтобы избежать утечек памяти
+    if (mapMarkers[id] && type !== 'snow_pile') mapMarkers[id].setLatLng(loc);
+    else if (mapMarkers[id]) mapMarkers[id].setLatLng(loc);
     else {
         const m = L.marker(loc, {icon: icon}).addTo(map);
         m.on('click', (e) => { L.DomEvent.stopPropagation(e); showPopup(data, type, id); map.flyTo(loc, map.getZoom()); });
@@ -349,14 +394,16 @@ function showPopup(item, type, id) {
     const titleEl = document.getElementById('interactTitle');
     const descEl = document.getElementById('interactDesc');
     const btns = document.getElementById('interactButtons');
-    
+    const iconEl = document.getElementById('interactIcon'); // Получаем элемент иконки
+
     titleEl.textContent = item.title;
     descEl.innerHTML = item.desc || '';
     btns.innerHTML = '';
+    iconEl.innerHTML = '⛺'; // Default icon
 
     if (type === 'tent') {
+        iconEl.innerHTML = '⛺';
         if (['leader', 'Negotiator'].includes(state.me.role)) {
-            // ✅ ТОЛЬКО КНОПКА "ПРЕДЛОЖИТЬ ОБМЕН"
             btns.innerHTML = `
                 <button class="propose-trade-btn" onclick="window.openTradeModal()">
                     💛 ПРЕДЛОЖИТЬ ОБМЕН
@@ -365,6 +412,22 @@ function showPopup(item, type, id) {
             descEl.innerHTML += `<p style="margin-top:10px; font-size:0.9rem; color:var(--text-muted);">Приходите в эту палатку — когда другая команда придет сюда, обмен произойдет автоматически.</p>`;
         } else {
             descEl.innerHTML += `<br><br><span class="muted" style="color:#ff5555">Только Лидер или Переговорщик могут предлагать обмены.</span>`;
+        }
+    } else if (type === 'npc') {
+        iconEl.innerHTML = item.icon || '👤'; // Используем иконку из БД
+        // Для NPC только описание
+    } else if (type === 'snow_pile') { // <--- ЛОГИКА ДЛЯ СУГРОБА
+        if (state.me.role !== 'Scavenger') {
+            iconEl.innerHTML = '❄️'; 
+            descEl.innerHTML += `<br><br><span class="muted" style="color:#ff5555">Только Кладоискатель может рыться в снегу.</span>`;
+        } else {
+            iconEl.innerHTML = '🧤'; 
+            descEl.innerHTML += `<p style="margin-top:10px; font-size:0.9rem; color:var(--text-muted);">Искать можно раз в 5 минут.</p>`;
+            btns.innerHTML = `
+                <button class="start-button" onclick="window.handleScavengeInteraction('${id}')">
+                    НАЧАТЬ ПОИСК
+                </button>
+            `;
         }
     }
     
@@ -466,6 +529,86 @@ window.handleItemUse = async (id) => {
          alert("Гаджет не настроен для использования.");
     }
 };
+
+// --- НОВАЯ ФУНКЦИЯ: Обработка взаимодействия с сугробом ---
+window.handleScavengeInteraction = async (snowPileId) => {
+    if (state.me.role !== 'Scavenger') return alert("Это могут делать только Кладоискатели!");
+
+    const now = Date.now();
+    const timePassed = now - lastScavengeTime;
+    
+    if (timePassed < SCAVENGER_COOLDOWN_MS) {
+        const remaining = Math.ceil((SCAVENGER_COOLDOWN_MS - timePassed) / 1000);
+        const m = Math.floor(remaining / 60);
+        const s = (remaining % 60).toString().padStart(2, '0');
+        return alert(`⏳ Перезарядка. Поиск в сугробах возможен через ${m}:${s}.`);
+    }
+
+    const modal = document.getElementById('interactionModal');
+    const descEl = document.getElementById('interactDesc');
+    const btns = document.getElementById('interactButtons');
+
+    // 1. Show loading state
+    const originalDesc = descEl.innerHTML;
+    const originalBtns = btns.innerHTML;
+    descEl.innerHTML = `
+        <div class="tent-waiting">
+            <div class="loader-spinner"></div>
+            <p style="font-size:1.1rem; margin-bottom:5px;">Идет поиск...</p>
+            <p class="muted" style="font-size:0.8rem; line-height:1.4;">Это может занять некоторое время.</p>
+        </div>
+    `;
+    btns.innerHTML = `<button class="secondary" disabled>ИДЕТ ПОИСК</button>`;
+    
+    // Временно отключаем кнопку на главном экране
+    const btnScavenge = document.getElementById('btnScavenge');
+    if(btnScavenge) btnScavenge.disabled = true;
+
+    // Имитация времени поиска
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // 2. Perform scavenge logic and set cooldown
+    const result = await scavengeItemLogic();
+    
+    // В любом случае (даже если ошибка/ничего не найдено) устанавливаем кулдаун
+    lastScavengeTime = now;
+    localStorage.setItem('lastScavengeTime', now);
+
+    // 3. Update UI based on result
+    if (result.success) {
+        
+        // Remove snow pile from local state и удаляем маркер
+        dynamicSnowPiles = dynamicSnowPiles.filter(p => p.id !== snowPileId);
+        
+        // Удаляем маркер из Leaflet
+        if (mapMarkers[snowPileId]) {
+            mapMarkers[snowPileId].remove();
+            delete mapMarkers[snowPileId];
+        }
+
+        // Обновление модального окна для показа результата
+        descEl.innerHTML = `
+            <div style="text-align:center; padding:20px;">
+                <div style="font-size:3rem;">${result.itemId ? '✅' : '🧊'}</div>
+                <h3 style="color:var(--accent-gold); margin:10px 0;">РЕЗУЛЬТАТ ПОИСКА</h3>
+                <p>${result.message.replace(/\*\*/g, '<strong>')}</p>
+            </div>
+        `;
+        btns.innerHTML = `<button class="start-button" onclick="document.getElementById('interactionModal').classList.add('hidden');">Готово</button>`;
+        
+        // Refresh inventory/UI
+        await refreshTeamData(); 
+        renderGameInterface();
+    } else {
+        // Восстановление UI в случае ошибки
+        alert("Ошибка поиска: " + result.message);
+        descEl.innerHTML = originalDesc;
+        btns.innerHTML = originalBtns;
+    }
+    
+    if(btnScavenge) btnScavenge.disabled = false;
+}
+
 
 // ================= ОБМЕН ЧЕРЕЗ МОДАЛЬНОЕ ОКНО =================
 

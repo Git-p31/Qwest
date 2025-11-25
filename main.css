@@ -1,31 +1,36 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
 
 :root {
-  --bg-deep: #0f1820;
-  --card-bg: rgba(20, 30, 45, 0.95);
-  --glass-border: rgba(255, 215, 0, 0.3);
-  --text-main: #FFF8E7;
-  --text-muted: #A0B0C0;
-  --accent-gold: #FFD700;
-  --accent-red: #FF3333;
-  --accent-green: #00D68F;
-  --accent-ice: #00FFFF;
-  --gradient-btn: linear-gradient(135deg, #D90026 0%, #FF8C00 100%);
-  --gradient-trade: linear-gradient(90deg, #FF5555, #FFA500); /* Новый градиент для обмена */
-  --stripe-color-1: #D90026; 
-  --stripe-color-2: #620818;
-  --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+    --bg-deep: #0f1820;
+    --card-bg: rgba(20, 30, 45, 0.95);
+    --glass-border: rgba(255, 215, 0, 0.6); /* Усиленная золотая рамка */
+    --text-main: #FFF8E7;
+    --text-muted: #A0B0C0;
+    --accent-gold: #FFD700;
+    --accent-red: #FF3333;
+    --accent-green: #00D68F;
+    --accent-ice: #00FFFF;
+    --gradient-btn: linear-gradient(135deg, #D90026 0%, #FF8C00 100%);
+    --gradient-trade: linear-gradient(90deg, #FF5555, #FFA500);
+    --stripe-color-1: #D90026; 
+    --stripe-color-2: #620818;
+    --font-main: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 * { box-sizing: border-box; font-family: var(--font-main); -webkit-tap-highlight-color: transparent; outline: none; }
 
 html, body {
-  height: 100%; margin: 0; padding: 0;
-  color: var(--text-main);
-  background: linear-gradient(rgba(5, 10, 20, 0.85), rgba(5, 10, 20, 0.9)), url('image.png');
-  background-position: center; background-size: cover; background-attachment: fixed; 
-  background-color: var(--bg-deep);
-  overflow-x: hidden;
+    height: 100%; 
+    margin: 0; 
+    padding: 0;
+    color: var(--text-main);
+    /* ФОН: Ярмарочная атмосфера */
+    background: linear-gradient(rgba(5, 10, 20, 0.85), rgba(5, 10, 20, 0.9)), url('image.png');
+    background-position: center; 
+    background-size: cover; 
+    background-attachment: fixed; 
+    background-color: var(--bg-deep);
+    overflow-x: hidden;
 }
 
 .hidden { display: none !important; }
@@ -40,53 +45,152 @@ canvas#iceFallCanvas { z-index: 9100; }
 #lastChanceTimer {
     position: fixed; top: 0; left: 0; width: 100%; height: 50px;
     background: repeating-linear-gradient(45deg, #cc0000, #cc0000 20px, #990000 20px, #990000 40px);
-    color: white; font-weight: 900; font-size: 1.1rem; display: flex; justify-content: center; align-items: center; gap: 10px;
-    z-index: 15000; border-bottom: 3px solid var(--accent-gold);
+    color: white; font-weight: 900; font-size: 1.1rem; 
+    display: flex; justify-content: center; align-items: center; 
+    gap: 10px;
+    z-index: 15000; 
+    border-bottom: 3px solid var(--accent-gold);
 }
 
 .game-wrap { 
-    padding: 10px; max-width: 1200px; margin: 0 auto; 
-    padding-top: 60px; min-height: 100vh; display: flex; flex-direction: column; gap: 15px; z-index: 5;
+    padding: 10px; 
+    max-width: 1200px; 
+    margin: 0 auto; 
+    padding-top: 60px; 
+    min-height: 100vh; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 10px; /* Сжатие */
+    z-index: 5;
     position: relative;
 }
 
 .game-header { 
-    display: flex; justify-content: space-between; align-items: center; 
-    padding: 10px 15px; background: rgba(20, 30, 40, 0.95); 
-    border: 1px solid var(--glass-border); border-radius: 16px;
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    padding: 10px 15px; 
+    background: rgba(20, 30, 40, 0.95); 
+    border: 1px solid var(--glass-border); 
+    border-radius: 16px;
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.2), inset 0 0 5px rgba(255, 255, 255, 0.1); 
 }
 .header-left, .header-right { display: flex; align-items: center; gap: 10px; }
 .avatar-circle { width: 40px; height: 40px; background: #333; border-radius: 50%; border: 2px solid var(--accent-gold); background-size: cover; }
 .player-name-header { font-weight: 800; text-transform: uppercase; font-size: 0.9rem; }
-.icon-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 1.4rem; cursor: pointer; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.icon-btn { 
+    background: rgba(255,255,255,0.05); 
+    border: 1px solid rgba(255,255,255,0.1); 
+    border-radius: 8px; 
+    font-size: 1.4rem; 
+    cursor: pointer; 
+    width: 40px; 
+    height: 40px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    transition: all 0.2s; 
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+}
 .icon-btn:active { transform: scale(0.9); }
 
-.game-main { display: flex; flex-direction: column; gap: 15px; flex-grow: 1; }
+.game-main { 
+    display: flex; 
+    flex-direction: column; 
+    gap: 10px; /* Сжатие */
+    flex-grow: 1; 
+}
+
+/* МОБИЛЬНЫЙ: Добавляем контейнер для нижних панелей */
+.bottom-panel { 
+    display: flex; 
+    flex-direction: column; 
+    gap: 10px; /* Сжатие */
+}
+
 @media (min-width: 900px) {
-    .game-main { display: grid; grid-template-columns: 280px 1fr 300px; align-items: start; }
-    .game-wrap { height: 100vh; overflow: hidden; }
-    .inventory-panel, .tasks-panel, .team-info-panel, .map-wrapper { max-height: 85vh; overflow-y: auto; }
+    .game-main { 
+        display: grid; 
+        grid-template-columns: 280px 1fr 300px; 
+        grid-template-rows: auto 1fr; 
+        grid-template-areas: "inventory map team-info"
+                             "tasks map team-info";
+        align-items: start; 
+        grid-gap: 10px; /* Сжатие на десктопе */
+    }
+    /* Расположение элементов по сетке */
+    .inventory-panel { grid-area: inventory; }
+    .tasks-panel { grid-area: tasks; max-height: none; }
+    .map-wrapper { grid-area: map; }
+    .team-info-panel { grid-area: team-info; }
+    .bottom-panel { display: block; }
+    
+    .game-wrap { height: 100vh; overflow: hidden; padding-top: 20px; }
+    .inventory-panel, .tasks-panel, .team-info-panel, .map-wrapper { max-height: 94vh; overflow-y: auto; }
 }
 
 .card {
-    background: var(--card-bg); border: 1px solid var(--glass-border);
-    border-radius: 16px; padding: 15px; position: relative; overflow: hidden; display: flex; flex-direction: column;
+    background: var(--card-bg); 
+    border: 1px solid var(--glass-border);
+    border-radius: 16px; 
+    padding: 15px; 
+    position: relative; 
+    overflow: hidden; 
+    display: flex; 
+    flex-direction: column;
+    box-shadow: 0 12px 35px rgba(0,0,0,0.8), 0 0 20px rgba(255, 215, 0, 0.5); /* Агрессивная тень */
 }
 .card::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 8px;
+    content: ''; 
+    position: absolute; 
+    top: 0; 
+    left: 0; 
+    right: 0; 
+    height: 8px;
     background: repeating-linear-gradient(-45deg, var(--stripe-color-1), var(--stripe-color-1) 10px, var(--stripe-color-2) 10px, var(--stripe-color-2) 20px);
     z-index: 2;
 }
 h2 { color: var(--accent-gold); margin: 5px 0 15px 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; }
 
-/* Inventory & Lists */
+/* Inventory & Lists (Плотный вид) */
 .inventory-list { list-style: none; padding: 0; margin: 0; }
-.inventory-list li { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); gap: 10px; }
-.inv-count { background: var(--accent-gold); color: #000; font-weight: bold; font-size: 0.8rem; padding: 2px 8px; border-radius: 10px; }
+.inventory-list li { 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between; 
+    padding: 8px; /* Сжатие вертикального отступа */
+    border-bottom: 1px solid rgba(255,255,255,0.1); 
+    gap: 10px; 
+    margin-bottom: 0; /* Убираем внешний отступ */
+    background: rgba(0,0,0,0.1); 
+    border-radius: 4px; /* Менее скругленный угол для плотности */
+}
+.inv-count { 
+    background: var(--accent-gold); 
+    color: #000; 
+    font-weight: bold; 
+    font-size: 0.8rem; 
+    padding: 2px 8px; 
+    border-radius: 10px; 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
 
 /* === MAP === */
 .leaflet-container { background: #0f1820 !important; font-family: var(--font-main); z-index: 1; }
-.map-wrapper { height: 500px; min-height: 400px; padding: 0 !important; position: relative; z-index: 1; border-radius: 20px; overflow: hidden; border: 2px solid var(--glass-border); }
+.map-wrapper { 
+    height: 400px; 
+    min-height: 400px; 
+    padding: 0 !important; 
+    position: relative; 
+    z-index: 1; 
+    border-radius: 20px; 
+    overflow: hidden; 
+    border: 3px solid var(--accent-gold); /* Жирная золотая рамка */
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.6);
+}
+@media (min-width: 900px) {
+    .map-wrapper { height: auto; min-height: 700px; }
+}
 #interactiveMap { width: 100%; height: 100%; }
 
 .custom-leaflet-icon { background: none; border: none; }
@@ -95,9 +199,17 @@ h2 { color: var(--accent-gold); margin: 5px 0 15px 0; font-size: 1.1rem; text-tr
 .marker:hover { z-index: 10000 !important; }
 
 .marker .pin {
-    width: 32px; height: 32px; border-radius: 50% 50% 50% 0; 
-    transform: rotate(-45deg); display: flex; align-items: center; justify-content: center;
-    font-size: 1.2rem; box-shadow: 0 5px 15px rgba(0,0,0,0.5); border: 2px solid #fff; background: #444; 
+    width: 32px; 
+    height: 32px; 
+    border-radius: 50% 50% 50% 0; 
+    transform: rotate(-45deg); 
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    font-size: 1.2rem; 
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5); 
+    border: 2px solid #fff; 
+    background: #444; 
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .marker .pin > div { transform: rotate(45deg); line-height: 1; pointer-events: none; }
@@ -106,19 +218,65 @@ h2 { color: var(--accent-gold); margin: 5px 0 15px 0; font-size: 1.1rem; text-tr
 .marker.npc .pin { background: #6ee7b7; border-color: #e0fff4; color: #003322; }
 .marker.team .pin { background: #93c5fd; border-color: #e0f0ff; color: #002244; }
 .marker.me .pin { background: #fb7185; border-color: #ffe0e6; color: #441111; animation: pulse-me 2s infinite; }
+/* СТИЛЬ СУГРОБА */
+.marker.snow_pile .pin { 
+    background: #E0FFFF; 
+    border-color: #A0FFFF; 
+    color: #0088AA;
+    border-radius: 50%; 
+    transform: rotate(0deg); 
+} 
+.marker.snow_pile .pin > div { transform: rotate(0deg); }
+
 @keyframes pulse-me { 0% { box-shadow: 0 0 0 0 rgba(251, 113, 133, 0.7); } 100% { box-shadow: 0 0 0 15px rgba(251, 113, 133, 0); } }
 
-.marker .label { background: rgba(0, 0, 0, 0.85); color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; margin-top: 8px; white-space: nowrap; backdrop-filter: blur(4px); pointer-events: none; border: 1px solid rgba(255,255,255,0.1); }
+.marker .label { 
+    background: rgba(0, 0, 0, 0.85); 
+    color: white; 
+    padding: 3px 8px; 
+    border-radius: 6px; 
+    font-size: 0.75rem; 
+    font-weight: 600; 
+    margin-top: 8px; 
+    white-space: nowrap; 
+    backdrop-filter: blur(4px); 
+    pointer-events: none; 
+    border: 1px solid rgba(255,255,255,0.1); 
+}
 
 .locate-btn { position: absolute; right: 15px; bottom: 25px; z-index: 500; background: var(--bg-deep); color: var(--accent-gold); padding: 10px 15px; border-radius: 50px; border: 1px solid var(--accent-gold); cursor: pointer; font-weight: bold; }
-.map-legend { position: absolute; left: 15px; bottom: 25px; z-index: 500; background: rgba(15, 20, 30, 0.9); color: #fff; padding: 12px; border-radius: 12px; font-size: 0.8rem; backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.15); }
+.map-legend { 
+    position: absolute; left: 15px; bottom: 25px; z-index: 500; 
+    background: rgba(15, 20, 30, 0.9); 
+    color: #fff; 
+    padding: 12px; 
+    border-radius: 12px; 
+    font-size: 0.8rem; 
+    backdrop-filter: blur(5px); 
+    border: 2px solid var(--accent-gold); 
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+}
 .map-legend > div { margin-bottom: 6px; display: flex; align-items: center; }
 .map-legend .mark { width: 10px; height: 10px; margin-right: 8px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.3); }
-.map-legend .tent { background: #ffd166; } .map-legend .npc { background: #6ee7b7; } .map-legend .team { background: #93c5fd; } .map-legend .me { background: #fb7185; }
+.map-legend .tent { background: #ffd166; } 
+.map-legend .npc { background: #6ee7b7; } 
+.map-legend .team { background: #93c5fd; } 
+.map-legend .me { background: #fb7185; }
+.map-legend .snow { background: #E0FFFF; }
 
 /* === MODALS === */
 .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); z-index: 9999; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
-.modal-content { width: 90%; max-width: 450px; background: #1a1a24; border-radius: 20px; padding: 25px; position: relative; border: 1px solid var(--glass-border); max-height: 90vh; overflow-y: auto; }
+.modal-content { 
+    width: 95%; max-width: 450px;
+    background: #1a1a24; 
+    border-radius: 20px; 
+    padding: 25px; 
+    position: relative; 
+    border: 1px solid var(--glass-border); 
+    max-height: 90vh; 
+    overflow-y: auto; 
+    box-shadow: 0 5px 25px rgba(255, 215, 0, 0.5);
+}
 .modal-header-strip { position: absolute; top: 0; left: 0; right: 0; height: 6px; background: repeating-linear-gradient(90deg, var(--accent-gold), var(--accent-gold) 20px, #b8860b 20px, #b8860b 40px); }
 .modal-title { color: var(--accent-gold); margin: 0; font-size: 1.2rem; }
 .modal-close { background: none; border: none; color: #fff; font-size: 2rem; cursor: pointer; line-height: 1; }
@@ -128,11 +286,17 @@ h2 { color: var(--accent-gold); margin: 5px 0 15px 0; font-size: 1.1rem; text-tr
 
 /* === КНОПКИ ОБМЕНА === */
 .start-button {
-    width: 100%; padding: 15px; border-radius: 50px;
-    font-weight: 900; text-transform: uppercase;
+    width: 100%; 
+    padding: 15px; 
+    border-radius: 50px;
+    font-weight: 900; 
+    text-transform: uppercase;
     background: var(--gradient-btn);
-    color: #fff; border: none; cursor: pointer;
-    margin-top: 20px; font-size: 1rem;
+    color: #fff; 
+    border: none; 
+    cursor: pointer;
+    margin-top: 20px; 
+    font-size: 1rem;
     transition: all 0.2s ease;
 }
 .start-button:hover {

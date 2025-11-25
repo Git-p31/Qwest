@@ -17,7 +17,10 @@ export const state = {
 };
 
 // ===== CONSTANTS =====
+// 1. Изменено: Кульдаун гаджетов на 2 минуты (2 * 60 * 1000)
 export const GADGET_COOLDOWN_MS = 2 * 60 * 1000;
+// 2. Изменено: Кульдаун поиска в сугробе на 1 минуту 50 секунд (110 * 1000)
+export const SCAVENGER_COOLDOWN_MS = (1 * 60 + 50) * 1000; 
 
 export const ROLES_DATA = {
     Explorer: 'Исследователь', Guardian: 'Хранитель', Saboteur: 'Диверсант',
@@ -29,6 +32,10 @@ export const CRAFT_RECIPES = [
     { id: 2, name: "Какао-Бомба", resultId: 12, description: "Снимает лед", ingredients: [{ id: 3, count: 2 }, { id: 4, count: 1 }] },
     { id: 3, name: "Огненная Руна", resultId: 13, description: "Защита", ingredients: [{ id: 5, count: 1 }, { id: 2, count: 1 }] }
 ];
+
+// ПУЛЫ ПРЕДМЕТОВ ДЛЯ КЛАДОИСКАТЕЛЯ
+const GADGET_POOL = [11, 12, 13]; // ID готовых гаджетов
+const RESOURCE_POOL = [1, 2, 3, 4, 5]; // ID базовых ресурсов (ингредиенты)
 
 // ===== API FUNCTIONS (CORE) =====
 
@@ -77,6 +84,24 @@ export async function fetchAllTeamsData() {
             };
         });
     }
+}
+
+// НОВАЯ ФУНКЦИЯ: Загрузка статических точек с карты из БД
+export async function fetchStaticMapPoints() {
+    const { data, error } = await supabase.from('map_points').select('*');
+    if (error) {
+        console.error("Error fetching map points:", error);
+        return [];
+    }
+    // Преобразование lat/lng (из БД) в x/y (0-100, используемые на карте)
+    return data.map(p => ({
+        id: p.id.toString(), // ID должен быть строкой для mapMarkers
+        type: p.type,
+        x: p.lng,
+        y: p.lat,
+        title: p.name,
+        desc: p.description,
+    }));
 }
 
 // ФУНКЦИЯ ДЛЯ ПРОВЕРКИ ГЛОБАЛЬНОГО СТАТУСА (Нужна для таймера)
@@ -142,6 +167,52 @@ export async function useGadgetLogic(itemId, targetTeamId) {
     state.lastGadgetUsage = Date.now();
     return { success: true };
 }
+
+// ФУНКЦИЯ ДЛЯ КЛАДОИСКАТЕЛЯ
+export async function scavengeItemLogic() {
+    const roll = Math.random();
+    let itemId = null;
+    let quantity = 0;
+    let message = "🥶 Вы нашли только ледяную крошку. Ничего не найдено."; // 50%
+
+    if (roll < 0.10) { // 10% шанс на Гаджет
+        const randomIndex = Math.floor(Math.random() * GADGET_POOL.length);
+        itemId = GADGET_POOL[randomIndex];
+        quantity = 1; // Гаджет всегда 1
+        message = `🎉 Вам повезло! Найден редкий **Гаджет**!`;
+    } else if (roll < 0.50) { // 40% шанс на Ресурс (0.10 до 0.50)
+        const randomIndex = Math.floor(Math.random() * RESOURCE_POOL.length);
+        itemId = RESOURCE_POOL[randomIndex];
+        quantity = Math.floor(Math.random() * 5) + 1; // 1-5 единиц ресурса
+        message = `✨ Найден полезный **Ресурс**!`;
+    }
+
+    if (!itemId) return { success: true, message: message, itemId: null };
+
+    // Добавление предмета в инвентарь
+    const newInventory = { ...state.currentTeam.inventory };
+    newInventory[itemId] = (newInventory[itemId] || 0) + quantity;
+    
+    // Атомарное обновление инвентаря
+    const { error } = await supabase.from('teams').update({
+        inventory: newInventory
+    }).eq('id', state.me.team_id);
+
+    if (error) {
+        console.error('Scavenge update error:', error);
+        return { success: false, message: 'Ошибка при сохранении инвентаря: ' + error.message };
+    }
+    
+    // Обновляем локальный стейт для быстрого ответа
+    state.currentTeam.inventory = newInventory;
+    
+    return { 
+        success: true, 
+        message: `${message} (+${quantity} ${state.globalItems[itemId]?.emoji || '🎁'} ${state.globalItems[itemId]?.name || '???'})`,
+        itemId: itemId 
+    };
+}
+
 
 export function setupRealtimeListeners(onMyTeamUpdate, onGlobalUpdate) {
     supabase.channel('my_team_updates')
