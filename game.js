@@ -1,68 +1,108 @@
-import { 
-    state, GADGET_COOLDOWN_MS, ROLES_DATA, CRAFT_RECIPES,
-    authPlayer, refreshTeamData, fetchAllTeamsData, 
-    setTentStatus, clearTentStatus, craftItemLogic, useGadgetLogic, setupRealtimeListeners,
-    updateTaskAndInventory, fetchGlobalGameState, updateTeamFreezeStatus, 
-    sendTradeRequest, fetchIncomingTrades, respondToTrade,
-    scavengeItemLogic, SCAVENGER_COOLDOWN_MS,
-    fetchStaticMapPoints,
-    MISSION_PATH_STRUCTURE, fetchQuizData,
-    SECRET_WORDS // ИМПОРТИРУЕМ ИЗ ENGINE.JS
-} from './engine.js';
+import * as Core from './core.js'; // Базовый движок (Supabase, state, fetchQuizData и т.д.)
+
+// Глобальная переменная для хранения логики миссий (будет заполнена в initGame)
+let MissionLogic = {}; 
 
 // =======================================================
-// ===== I. UI CONFIG & GLOBAL STATE MANAGEMENT =====
+// ===== I. UI CONFIG & GLOBAL STATE MANAGEMENT (MAIN) =====
 // =======================================================
-
 const TEAMS_UI_CONFIG = {
     101: { color: '#8be9fd', symbol: '❄️' },
     102: { color: '#ff5555', symbol: '🔴' },
     103: { color: '#f1fa8c', symbol: '💡' },
     104: { color: '#bd93f9', symbol: '🎅' },
 };
+window.TEAMS_UI_CONFIG = TEAMS_UI_CONFIG;
 
-// --- CONSTANTS ---
 const TELEGRAM_GROUP_LINK = 'https://t.me/stuttgart_quest_group'; 
 const MAX_SNOW_PILES = 5;
+window.TELEGRAM_GROUP_LINK = TELEGRAM_GROUP_LINK;
+
+const VALID_TASK_IDS = {
+    101: [1, 2, 3, 4, 5, 6],
+    103: [1, 2, 3, 4, 5, 6],
+    102: [10, 11, 12, 13, 14, 15],
+    104: [10, 11, 12, 13, 14, 15],
+};
+const MAIN_MISSION_IDS = [1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 15]; 
 
 // --- DYNAMIC STATE ---
 let map = null;
 let mapMarkers = {};
 let wasFrozen = false;
-let timerUiInterval = null;
 let hasShownVictory = false;
 let staticMapPoints = []; 
 let dynamicSnowPiles = []; 
 let snowSpawnInterval = null;
 let lastScavengeTime = Number(localStorage.getItem('lastScavengeTime')) || 0; 
-let quizState = {
-    currentTaskId: null, quizInProgress: false, quizData: [], 
-    currentQuestionIndex: 0, correctCount: 0, successThreshold: 0,
-};
-window.selectedAnswers = {};
+window.selectedAnswers = {}; // Глобальное состояние для квизов остается здесь или в модулях
+
+// --- ФУНКЦИЯ ПРИВЯЗКИ ФУНКЦИЙ МИССИЙ К WINDOW (для HTML) ---
+function assignMissionFunctionsToWindow() {
+    if (!MissionLogic || !MissionLogic.routeTaskToModal) return;
+
+    // Перечисляем все функции, которые мы ожидаем вызывать из HTML/других частей game.js
+    const functionsToAssign = [
+        'routeTaskToModal', 'openQuizModal', 'renderSequentialQuestion', 
+        'handleSequentialAnswer', 'renderBulkQuiz', 'handleBulkSubmit', 
+        'finalizeQuizResult', 'openSecretWordModal', 'handleSecretWordSubmit', 
+        'openTicTacToeModal', 'sendGameChallenge', 'handleTicTacToeResult'
+    ];
+
+    functionsToAssign.forEach(funcName => {
+        if (typeof MissionLogic[funcName] === 'function') {
+            window[funcName] = MissionLogic[funcName];
+        }
+    });
+}
+// --- КОНЕЦ ФУНКЦИИ ПРИВЯЗКИ ---
 
 
-// ===== INITIALIZATION & CORE =====
-
+// ===== INITIALIZATION & CORE (Исправлено) =====
 async function initGame() {
-    const player = await authPlayer();
+    
+    // 1. Аутентификация игрока (заполняет Core.state.me)
+    const player = await Core.authPlayer();
     if (!player) return alert("Ошибка входа! Игрок не найден.");
 
-    document.getElementById('myNameHeader').textContent = state.me.name;
-    document.getElementById('myPlayerRole').textContent = ROLES_DATA[state.me.role] || state.me.role;
+    // 2. Динамический импорт логики заданий ПОСЛЕ аутентификации
+    const teamId = Core.state.me.team_id;
+    try {
+        if (teamId === 101 || teamId === 103) {
+            MissionLogic = await import('./missions_101_103.js');
+        } else if (teamId === 102 || teamId === 104) {
+            MissionLogic = await import('./missions_102_104.js');
+        } else {
+            // Если teamId существует, но не соответствует ожидаемым группам
+            throw new Error("ID команды не соответствует ни одной группе заданий (101-104).");
+        }
+        
+        // Привязка функций к window, чтобы они работали из HTML
+        assignMissionFunctionsToWindow();
+        
+    } catch (e) {
+        console.error("Критическая ошибка загрузки MissionLogic:", e);
+        // Используем alert из оригинального кода, который теперь корректно срабатывает
+        alert("Ошибка: Логика заданий для вашей команды не загружена."); 
+        return; // Останавливаем инициализацию
+    }
+
+
+    document.getElementById('myNameHeader').textContent = Core.state.me.name;
+    document.getElementById('myPlayerRole').textContent = Core.ROLES_DATA[Core.state.me.role] || Core.state.me.role;
     
     // Role Buttons Visibility
-    if (state.me.role === 'Spy') document.getElementById('btnSpyAction')?.classList.remove('hidden'); 
-    if (state.me.role === 'Scavenger') document.getElementById('btnScavenge')?.classList.remove('hidden');
-    if (state.me.role === 'Guardian') document.getElementById('btnGuardianWarm')?.classList.remove('hidden'); 
-    if (['leader', 'Negotiator'].includes(state.me.role)) {
+    if (Core.state.me.role === 'Spy') document.getElementById('btnSpyAction')?.classList.remove('hidden'); 
+    if (Core.state.me.role === 'Scavenger') document.getElementById('btnScavenge')?.classList.remove('hidden');
+    if (Core.state.me.role === 'Guardian') document.getElementById('btnGuardianWarm')?.classList.remove('hidden'); 
+    if (['leader', 'Negotiator'].includes(Core.state.me.role)) {
         document.getElementById('btnShowTrades')?.classList.remove('hidden');
     }
 
-    staticMapPoints = await fetchStaticMapPoints();
+    staticMapPoints = await Core.fetchStaticMapPoints();
     
-    await fetchAllTeamsData();
-    await refreshTeamData();
+    await Core.fetchAllTeamsData();
+    await Core.refreshTeamData();
     
     initMapLogic();
     renderGameInterface();
@@ -70,20 +110,17 @@ async function initGame() {
     
     startSnowPileSpawning(); 
 
-    setupRealtimeListeners(
+    Core.setupRealtimeListeners(
         async (newTeam, oldTeam) => {
-            Object.assign(state.currentTeam, newTeam);
+            Object.assign(Core.state.currentTeam, newTeam);
             renderGameInterface();
         },
         (updatedTeam) => {
             renderMarkers(); 
-            if (state.currentTeam?.current_tent_id && updatedTeam.current_tent_id === state.currentTeam.current_tent_id && updatedTeam.id !== state.me.team_id) {
-                performExchange(updatedTeam);
-            }
         }
     );
 
-    if(['leader', 'Negotiator'].includes(state.me.role)) clearTentStatus();
+    if(['leader', 'Negotiator'].includes(Core.state.me.role)) Core.clearTentStatus();
 }
 
 // -------------------------------------------------------
@@ -91,12 +128,12 @@ async function initGame() {
 // -------------------------------------------------------
 
 function renderGameInterface() {
-    if(!state.currentTeam) return;
+    if(!Core.state.currentTeam) return;
 
-    const uiCfg = TEAMS_UI_CONFIG[state.currentTeam.id] || {symbol: '🎄'};
-    const name = state.currentTeam.name_by_leader || state.currentTeam.name;
+    const uiCfg = TEAMS_UI_CONFIG[Core.state.currentTeam.id] || {symbol: '🎄'};
+    const name = Core.state.currentTeam.name_by_leader || Core.state.currentTeam.name;
     document.getElementById('myTeamName').innerHTML = `${name} ${uiCfg.symbol}`;
-    if(state.currentTeam.selfie_url) document.getElementById('myTeamAvatar').style.backgroundImage = `url('${state.currentTeam.selfie_url}')`;
+    if(Core.state.currentTeam.selfie_url) document.getElementById('myTeamAvatar').style.backgroundImage = `url('${Core.state.currentTeam.selfie_url}')`;
 
     renderInventory();
     renderTasks();
@@ -106,22 +143,22 @@ function renderGameInterface() {
 
 function renderInventory() {
     const list = document.getElementById('inventoryList'); list.innerHTML = '';
-    const inv = state.currentTeam.inventory || {};
+    const inv = Core.state.currentTeam.inventory || {};
     let hasItems = false;
 
     Object.keys(inv).forEach(id => {
         if(inv[id] > 0) {
             hasItems = true;
-            const item = state.globalItems[id] || {name:'???', emoji:'📦', type:'item'};
+            const item = Core.state.globalItems[id] || {name:'???', emoji:'📦', type:'item'};
             let actionBtn = '';
             
             let iconHtml = (item.emoji && item.emoji.startsWith('http')) 
                 ? `<img src="${item.emoji}" alt="${item.name}" style="width: 32px; height: 32px; object-fit: contain; filter: drop-shadow(0 0 1px #FFF);">` 
                 : `<span style="font-size:1.5rem">${item.emoji}</span>`;
 
-            if (item.type === 'gadget' && state.me.role === 'Saboteur') {
+            if (item.type === 'gadget' && Core.state.me.role === 'Saboteur') {
                 const now = Date.now();
-                const remaining = GADGET_COOLDOWN_MS - (now - state.lastGadgetUsage);
+                const remaining = Core.GADGET_COOLDOWN_MS - (now - Core.state.lastGadgetUsage);
                 const disabled = remaining > 0 ? 'disabled' : '';
                 const cooldownText = remaining > 0 ? `(${Math.ceil(remaining / 1000)}с)` : '';
                 actionBtn = `<button class="btn-use" ${disabled} onclick="window.handleItemUse(${id})">USE ${cooldownText}</button>`;
@@ -151,7 +188,11 @@ function renderTasks() {
     const progressEl = document.getElementById('taskProgress');
     tbody.innerHTML = '';
     
-    const tasks = state.currentTeam.tasks || [];
+    const teamId = Core.state.me.team_id;
+    const validIds = VALID_TASK_IDS[teamId] || []; 
+    
+    const tasks = (Core.state.currentTeam.tasks || []).filter(t => validIds.includes(t.id));
+
     let completedCount = 0;
 
     tasks.forEach(task => {
@@ -159,23 +200,19 @@ function renderTasks() {
         const isChecked = task.completed ? 'checked disabled' : ''; 
         
         const reward = task.reward_item_id 
-            ? (state.globalItems[task.reward_item_id]?.emoji || '🎁') 
+            ? (Core.state.globalItems[task.reward_item_id]?.emoji || '🎁') 
             : '';
 
         let taskText = task.text;
-        let onClickHandler = `window.toggleTask(${task.id}, this)`;
         
-        if ([1, 2, 3, 4, 5, 6].includes(task.id) && !task.completed) {
-               taskText = `<a href="#" onclick="window.routeTaskToModal(${task.id}); return false;" style="color: var(--accent-gold); text-decoration: none;">${task.text} (Начать)</a>`;
-               onClickHandler = 'return;'; 
-        }
+
 
         const tr = document.createElement('tr');
         tr.className = task.completed ? 'task-row completed' : 'task-row';
         
         tr.innerHTML = `
             <td style="text-align:center; width:30px;">
-                <input type="checkbox" ${isChecked} onclick="${onClickHandler}">
+                <input type="checkbox" ${isChecked} onclick="return false;">
             </td>
             <td>${taskText}</td>
             <td style="text-align:center; font-size:1.2rem;">${reward}</td>
@@ -187,9 +224,10 @@ function renderTasks() {
         progressEl.textContent = '0%';
         return;
     }
+    
     progressEl.textContent = Math.round((completedCount / tasks.length) * 100) + '%';
     
-    if (tasks.filter(t => [1, 2, 3, 4, 5, 6].includes(t.id)).every(t => t.completed) && !hasShownVictory) {
+    if (tasks.filter(t => MAIN_MISSION_IDS.includes(t.id)).every(t => t.completed) && !hasShownVictory) {
         hasShownVictory = true;
         alert("🎉 ПОЗДРАВЛЯЕМ! Вы выполнили все основные миссии! Идите к организаторам!");
     }
@@ -200,11 +238,11 @@ function renderMembers() {
     const countEl = document.getElementById('myTeamMembersCount');
     
     list.innerHTML = '';
-    countEl.textContent = state.teamMembers.length;
+    countEl.textContent = Core.state.teamMembers.length;
 
-    state.teamMembers.forEach(m => {
-        const roleName = ROLES_DATA[m.role] || m.role;
-        const isMe = m.id === state.me.id ? ' (Вы)' : '';
+    Core.state.teamMembers.forEach(m => {
+        const roleName = Core.ROLES_DATA[m.role] || m.role;
+        const isMe = m.id === Core.state.me.id ? ' (Вы)' : '';
         const icon = m.role === 'leader' ? '👑' : '👤';
         
         list.innerHTML += `
@@ -231,7 +269,7 @@ function initMapLogic() {
     renderMarkers();
     // Симуляция движения других команд
     setInterval(() => {
-        state.otherTeams.forEach(t => {
+        Core.state.otherTeams.forEach(t => {
             t.x = Math.max(10, Math.min(90, t.x + (Math.random() - 0.5) * 2)); 
             t.y = Math.max(10, Math.min(90, t.y + (Math.random() - 0.5) * 2));
         });
@@ -242,17 +280,18 @@ function initMapLogic() {
 function findActiveMission(tasks) {
     if (!tasks || tasks.length === 0) return null;
     
-    const activeTask = tasks.find(t => !t.completed);
+    const validIds = VALID_TASK_IDS[Core.state.me.team_id] || [];
+    const activeTask = tasks.find(t => !t.completed && validIds.includes(t.id));
     if (!activeTask) return null; 
         
     let pathKey = '';
-    if (state.me.team_id === 101 || state.me.team_id === 103) {
+    if (Core.state.me.team_id === 101 || Core.state.me.team_id === 103) {
         pathKey = '101_103';
-    } else if (state.me.team_id === 102 || state.me.team_id === 104) {
+    } else if (Core.state.me.team_id === 102 || Core.state.me.team_id === 104) {
         pathKey = '102_104';
     }
 
-    const pathSequence = MISSION_PATH_STRUCTURE[pathKey];
+    const pathSequence = Core.MISSION_PATH_STRUCTURE[pathKey];
     if (!pathSequence) return null;
 
     const missionStep = pathSequence.find(p => p.taskId === activeTask.id);
@@ -276,17 +315,24 @@ function renderMarkers() {
         if (id !== 'me') { mapMarkers[id].remove(); delete mapMarkers[id]; }
     });
     
-    const mission = findActiveMission(state.currentTeam.tasks);
+    const mission = findActiveMission(Core.state.currentTeam.tasks);
 
+    // Всегда отрисовываем статические точки (палатки, NPC)
+    staticMapPoints.forEach(item => {
+        if (mission && item.title === mission.title) return;
+        if (item.type === 'tent' || item.type === 'npc') {
+            updateMarker(item.id, item.type, item.x, item.y, item.title, item, item.icon);
+        }
+    });
+
+    // АКТИВНАЯ МИССИЯ: Отрисовываем только если найдена
     if (mission) {
         updateMarker(mission.id, mission.type, mission.x, mission.y, mission.title, mission, '🎯');
-    } else {
-        staticMapPoints.filter(p => p.type !== 'mission_stall').forEach(item => updateMarker(item.id, item.type, item.x, item.y, item.title, item, item.icon));
     }
     
     dynamicSnowPiles.forEach(item => updateMarker(item.id, 'snow_pile', item.x, item.y, item.title, item, '🧤'));
     
-    state.otherTeams.forEach(t => {
+    Core.state.otherTeams.forEach(t => {
         const symbol = TEAMS_UI_CONFIG[t.id]?.symbol || '👥';
         const teamName = t.name_by_leader || t.name;
         const isFrozen = t.frozen_until && new Date(t.frozen_until) > new Date();
@@ -343,27 +389,27 @@ function startSnowPileSpawning() {
 // -------------------------------------------------------
 
 window.toggleTask = async (taskId, checkboxEl) => {
-    if(state.me.role !== 'leader') { 
+    if(Core.state.me.role !== 'leader') { 
         checkboxEl.checked = !checkboxEl.checked; 
         return alert("Только лидер может отмечать задачи!"); 
     }
     
-    if ([1, 2, 3, 4, 5, 6].includes(taskId)) {
+    if (MAIN_MISSION_IDS.includes(taskId)) {
         alert("Это специальное задание. Его статус обновляется автоматически по результатам квиза/игры.");
         checkboxEl.checked = !checkboxEl.checked; 
         return;
     }
 
-    const task = state.currentTeam.tasks.find(t => t.id === taskId);
+    const task = Core.state.currentTeam.tasks.find(t => t.id === taskId);
     if (!task) return;
     
     const isChecking = checkboxEl.checked;
-    let newInventory = { ...state.currentTeam.inventory };
+    let newInventory = { ...Core.state.currentTeam.inventory };
     
     if (isChecking) {
         if (task.required_item_id) { 
             if ((newInventory[task.required_item_id] || 0) < 1) { 
-                alert(`Не хватает предмета: ${state.globalItems[task.required_item_id]?.name || '???'}`); 
+                alert(`Не хватает предмета: ${Core.state.globalItems[task.required_item_id]?.name || '???'}`); 
                 checkboxEl.checked = false;
                 return;
             }
@@ -373,13 +419,13 @@ window.toggleTask = async (taskId, checkboxEl) => {
         if (task.reward_item_id) { 
             const rewardId = task.reward_item_id;
             newInventory[rewardId] = (newInventory[rewardId] || 0) + 1;
-            alert(`🎉 Получена награда: ${state.globalItems[rewardId]?.name}!`);
+            alert(`🎉 Получена награда: ${Core.state.globalItems[rewardId]?.name}!`);
         }
     } 
     
-    const newTasks = state.currentTeam.tasks.map(t => t.id === taskId ? {...t, completed: isChecking} : t);
+    const newTasks = Core.state.currentTeam.tasks.map(t => t.id === taskId ? {...t, completed: isChecking} : t);
 
-    const result = await updateTaskAndInventory(state.me.team_id, newTasks, newInventory);
+    const result = await Core.updateTaskAndInventory(Core.state.me.team_id, newTasks, newInventory);
     
     if (!result.success) {
         console.error('Task update error:', result.error);
@@ -388,52 +434,50 @@ window.toggleTask = async (taskId, checkboxEl) => {
         return;
     }
     renderMarkers();
-    await refreshTeamData();
+    await Core.refreshTeamData();
     renderGameInterface();
 };
 
+
 window.routeTaskToModal = (taskId) => {
-    if (state.me.role !== 'leader') {
+    if (Core.state.me.role !== 'leader') {
         return alert("Только лидер может запускать специальные задания (Квизы/Игры)!");
     }
     
-    if (taskId === 1 || taskId === 4) {
-        window.openQuizModal(taskId);
-    } else if (taskId === 2) {
-        window.openSecretWordModal(2, 'САМЫЙ ДЕШЕВЫЙ ПРЕДМЕТ', '💰', 'Найдите самый дешевый съедобный предмет (на ярмарке) и введите его название как секретное слово.');
-    } else if (taskId === 3) {
-        window.openSecretWordModal(3, 'ФОРМА ЗВЕЗДЫ', '⭐', 'Соберитесь командой и снимите видео, где вы делаете форму звезды. Отправьте видео в Telegram и получите слово.');
-    } else if (taskId === 5) {
-        window.openSecretWordModal(5, 'СПЕТЬ ПЕСЕНКУ', '🎤', 'Снимите видео, как ваша команда поет новогоднюю песню. Отправьте видео в Telegram и получите слово.');
-    } else if (taskId === 6) {
-        window.openTicTacToeModal();
+    if (MissionLogic && MissionLogic.routeTaskToModal) {
+        // Вызываем функцию из импортированного модуля заданий
+        MissionLogic.routeTaskToModal(taskId);
+    } else {
+        // Эта ветка теперь должна быть недостижима, если initGame отработал корректно
+        alert("Ошибка: Логика заданий для вашей команды не загружена.");
     }
-}
+};
+
 
 // --- ITEM USE & CRAFTING ---
 
 window.handleItemUse = async (id) => {
     const now = Date.now();
-    if(now - state.lastGadgetUsage < GADGET_COOLDOWN_MS) {
-        const remaining = Math.ceil((GADGET_COOLDOWN_MS - (now - state.lastGadgetUsage)) / 1000);
+    if(now - Core.state.lastGadgetUsage < Core.GADGET_COOLDOWN_MS) {
+        const remaining = Math.ceil((Core.GADGET_COOLDOWN_MS - (now - Core.state.lastGadgetUsage)) / 1000);
         return alert(`Перезарядка: ${remaining} секунд.`);
     }
     
     if(id == 11) { // Ледяная Бомба
         const targetId = prompt("ID цели (101-104):");
-        const targetTeam = state.otherTeams.find(t => t.id == targetId);
+        const targetTeam = Core.state.otherTeams.find(t => t.id == targetId);
         if(!targetTeam) return alert("Команда не найдена или неверный ID");
 
-        if ((state.currentTeam.inventory[id] || 0) < 1) return alert("У вас нет этого гаджета.");
+        if ((Core.state.currentTeam.inventory[id] || 0) < 1) return alert("У вас нет этого гаджета.");
         
-        // useGadgetLogic обновляет state.lastGadgetUsage только при успехе
-        const res = await useGadgetLogic(id, targetId); 
+        // useGadgetLogic обновляет Core.state.lastGadgetUsage только при успехе
+        const res = await Core.useGadgetLogic(id, targetId); 
         if(res.success) {
             alert(`Успех! Команда ${targetTeam.name_by_leader || targetTeam.name} заморожена.`);
         } else {
             alert(res.msg);
         }
-        await refreshTeamData();
+        await Core.refreshTeamData();
         renderGameInterface();
     } else {
         alert("Гаджет не настроен для использования.");
@@ -441,7 +485,7 @@ window.handleItemUse = async (id) => {
 };
 
 window.openCraftModal = () => {
-    if(state.me.role !== 'Explorer') return alert("Только Исследователь!");
+    if(Core.state.me.role !== 'Explorer') return alert("Только Исследователь!");
     window.closeModal('craftModal'); // Закрыть предыдущее, если открыто
     document.getElementById('craftModal').classList.remove('hidden');
     renderCraftUI();
@@ -449,13 +493,13 @@ window.openCraftModal = () => {
 
 function renderCraftUI() {
     const cont = document.getElementById('craftRecipesList'); cont.innerHTML = '';
-    const inv = state.currentTeam.inventory || {};
+    const inv = Core.state.currentTeam.inventory || {};
     
-    CRAFT_RECIPES.forEach(r => {
-        const resItem = state.globalItems[r.resultId];
+    Core.CRAFT_RECIPES.forEach(r => {
+        const resItem = Core.state.globalItems[r.resultId];
         let can = true;
         const ingHTML = r.ingredients.map(ing => {
-            const item = state.globalItems[ing.id];
+            const item = Core.state.globalItems[ing.id];
             const has = inv[ing.id] || 0;
             if(has < ing.count) can = false;
             return `<div class="ingredient-box ${has >= ing.count?'has-it':'missing'}">
@@ -478,7 +522,7 @@ function renderCraftUI() {
 }
 
 window.doCraft = async (rid) => {
-    const res = await craftItemLogic(rid);
+    const res = await Core.craftItemLogic(rid);
     if(res.success) { alert(`Создано: ${res.itemName}`); renderCraftUI(); renderGameInterface(); }
     else alert(res.msg);
 };
@@ -486,13 +530,13 @@ window.doCraft = async (rid) => {
 // --- SCAVENGE LOGIC ---
 
 window.handleScavengeInteraction = async (snowPileId) => {
-    if (state.me.role !== 'Scavenger') return alert("Это могут делать только Кладоискатели!");
+    if (Core.state.me.role !== 'Scavenger') return alert("Это могут делать только Кладоискатели!");
 
     const now = Date.now();
     const timePassed = now - lastScavengeTime;
     
-    if (timePassed < SCAVENGER_COOLDOWN_MS) {
-        const remaining = Math.ceil((SCAVENGER_COOLDOWN_MS - timePassed) / 1000);
+    if (timePassed < Core.SCAVENGER_COOLDOWN_MS) {
+        const remaining = Math.ceil((Core.SCAVENGER_COOLDOWN_MS - timePassed) / 1000);
         const m = Math.floor(remaining / 60);
         const s = (remaining % 60).toString().padStart(2, '0');
         return alert(`⏳ Перезарядка. Поиск в сугробах возможен через ${m}:${s}.`);
@@ -510,7 +554,7 @@ window.handleScavengeInteraction = async (snowPileId) => {
     
     await new Promise(resolve => setTimeout(resolve, 1500));
 
-    const result = await scavengeItemLogic();
+    const result = await Core.scavengeItemLogic();
     
     if (result.success) {
         lastScavengeTime = now;
@@ -523,13 +567,13 @@ window.handleScavengeInteraction = async (snowPileId) => {
         }
 
         descEl.innerHTML = `<div style="text-align:center; padding:20px;">
-                                <div style="font-size:3rem;">${result.itemId ? '✅' : '🧊'}</div>
-                                <h3 style="color:var(--accent-gold); margin:10px 0;">РЕЗУЛЬТАТ ПОИСКА</h3>
-                                <p>${result.message.replace(/\*\*/g, '<strong>')}</p>
-                            </div>`;
+                                 <div style="font-size:3rem;">${result.itemId ? '✅' : '🧊'}</div>
+                                 <h3 style="color:var(--accent-gold); margin:10px 0;">РЕЗУЛЬТАТ ПОИСКА</h3>
+                                 <p>${result.message.replace(/\*\*/g, '<strong>')}</p>
+                             </div>`;
         btns.innerHTML = `<button class="start-button" onclick="window.closeModal('interactionModal');">Готово</button>`;
         
-        await refreshTeamData(); 
+        await Core.refreshTeamData(); 
         renderGameInterface();
     } else {
         alert("Ошибка поиска: " + result.message);
@@ -538,414 +582,6 @@ window.handleScavengeInteraction = async (snowPileId) => {
     }
 }
 
-// --- QUIZ LOGIC FUNCTIONS ---
-
-window.openQuizModal = async (taskId) => {
-    if (state.me.role !== 'leader') return alert("Только лидер может запускать квизы!");
-
-    const modal = document.getElementById('quizModal');
-    const quizContent = document.getElementById('quizQuestionsContainer');
-    const titleEl = document.getElementById('quizModalTitle');
-    const teamId = state.me.team_id;
-
-    quizContent.innerHTML = '<div style="text-align: center; padding: 20px;">Загрузка вопросов...</div>';
-    document.getElementById('quizFinalMessage').innerHTML = '';
-    document.getElementById('quizScoreDisplay').innerHTML = '';
-    document.getElementById('quizSubmitBtn')?.classList.add('hidden');
-    
-    modal.classList.remove('hidden');
-
-    const quizData = await fetchQuizData(taskId, teamId); 
-    
-    if (!quizData || quizData.length === 0) {
-        quizContent.innerHTML = '<p class="muted" style="text-align: center;">❌ Вопросы для вашей команды не найдены. Свяжитесь с организатором.</p>';
-        return;
-    }
-    
-    quizState.currentTaskId = taskId;
-    quizState.quizData = quizData;
-    quizState.currentQuestionIndex = 0;
-    quizState.correctCount = 0;
-    quizState.quizInProgress = true;
-    quizState.successThreshold = Math.ceil(quizData.length / 2) + 1;
-    
-    titleEl.textContent = taskId === 4 ? '📜 КВИЗ: Немецкие традиции' : '🎬 ЗАДАНИЕ 1: Угадай Сюжет/Персонажа';
-    
-    const isSequential = (taskId === 4); 
-    
-    if (isSequential) {
-        if (!quizData[0] || !quizData[0].options) {
-             quizContent.innerHTML = `<p class="muted" style="text-align: center; color: var(--accent-red);">❌ Критическая ошибка: Для задания №${taskId} не найдены варианты ответа (опции) в базе данных.</p>`;
-             return;
-        }
-        window.renderSequentialQuestion();
-    } else {
-        window.renderBulkQuiz(quizData, taskId);
-    }
-};
-
-window.renderSequentialQuestion = () => {
-    const container = document.getElementById('quizQuestionsContainer');
-    const scoreDisplay = document.getElementById('quizScoreDisplay');
-    
-    if (!quizState.quizInProgress || quizState.currentQuestionIndex >= quizState.quizData.length) {
-        window.finalizeQuizResult(quizState.currentTaskId, quizState.quizData.length, quizState.correctCount, quizState.successThreshold);
-        return;
-    }
-
-    const currentItem = quizState.quizData[quizState.currentQuestionIndex];
-    let optionsArray = [];
-    
-    let optionsString = currentItem.options;
-
-    // --- УЛУЧШЕННЫЙ ПАРСИНГ JSONB ---
-    // 1. Убираем потенциальный префикс типа "(N) "
-    const match = String(optionsString).trim().match(/^\((\d+)\)\s*(.*)/);
-    if (match) {
-        optionsString = match[2];
-    }
-    
-    // Если опции все еще строка, пытаемся распарсить
-    if (typeof optionsString === 'string' && optionsString.trim().length > 0) {
-        try {
-            // Если строка обернута в кавычки (из-за некорректного ввода)
-            if (optionsString.startsWith('"') && optionsString.endsWith('"')) {
-                 optionsString = optionsString.substring(1, optionsString.length - 1);
-            }
-            optionsArray = JSON.parse(optionsString);
-        } catch (e) {
-            console.error("Failed to parse options JSON:", optionsString, e);
-            container.innerHTML = `<p class="muted" style="text-align: center; color: var(--accent-red);">❌ Критическая ошибка: Неверный формат вариантов ответа. (Невалидный JSONB)</p>`;
-            document.getElementById('quizSubmitBtn')?.classList.add('hidden');
-            return; 
-        }
-    } else if (Array.isArray(optionsString)) {
-        // Если база данных вернула уже распарсенный JSONB массив
-        optionsArray = optionsString;
-    } else {
-         container.innerHTML = `<p class="muted" style="text-align: center; color: var(--accent-red);">❌ Критическая ошибка: Варианты ответа пусты или отсутствуют.</p>`;
-         document.getElementById('quizSubmitBtn')?.classList.add('hidden');
-         return;
-    }
-    
-    if (!optionsArray || optionsArray.length === 0) {
-         container.innerHTML = `<p class="muted" style="text-align: center; color: var(--accent-red);">❌ Критическая ошибка: Варианты ответа пусты или отсутствуют.</p>`;
-         document.getElementById('quizSubmitBtn')?.classList.add('hidden');
-         return;
-    }
-    // --- КОНЕЦ УЛУЧШЕННОГО ПАРСИНГА ---
-    
-    scoreDisplay.innerHTML = `Вопрос ${quizState.currentQuestionIndex + 1} из ${quizState.quizData.length} (Верно: <span style="color: var(--accent-gold);">${quizState.correctCount}</span>)`;
-
-    let buttonsHtml = optionsArray.map((option, optIndex) => {
-        const escapedOption = option.replace(/'/g, "\\'"); 
-        
-        return `<button class="quiz-answer-btn" data-answer="${option}" 
-                    onclick="window.handleSequentialAnswer(this, ${currentItem.id}, '${escapedOption}')">
-                    ${String.fromCharCode(65 + optIndex)}. ${option}
-                </button>`;
-    }).join('');
-
-    container.innerHTML = `
-        <div class="quiz-question-box">
-            <p style="font-weight: 900; font-size: 1.3rem; margin-bottom: 20px;">${currentItem.q}</p>
-            <div class="quiz-options-grid" id="q_options_${currentItem.id}">
-                ${buttonsHtml}
-            </div>
-        </div>
-    `;
-    
-    document.getElementById('quizSubmitBtn')?.classList.add('hidden');
-};
-
-
-window.handleSequentialAnswer = (button, questionId, selectedAnswer) => {
-    if (!quizState.quizInProgress) return;
-    
-    const currentItem = quizState.quizData[quizState.currentQuestionIndex];
-    const isCorrect = (selectedAnswer === currentItem.a);
-    
-    const parentGrid = button.closest('.quiz-options-grid');
-    parentGrid.querySelectorAll('.quiz-answer-btn').forEach(btn => btn.disabled = true);
-    
-    if (isCorrect) {
-        quizState.correctCount++;
-        button.classList.add('correct-flash');
-    } else {
-        button.classList.add('incorrect');
-        parentGrid.querySelectorAll('.quiz-answer-btn').forEach(btn => {
-            if (btn.dataset.answer === currentItem.a) {
-                btn.classList.add('correct-flash');
-            }
-        });
-    }
-
-    quizState.currentQuestionIndex++;
-    
-    setTimeout(window.renderSequentialQuestion, 2000);
-};
-
-window.renderBulkQuiz = (quizData, taskId) => {
-    const container = document.getElementById('quizQuestionsContainer');
-    const scoreDisplay = document.getElementById('quizScoreDisplay');
-    
-    let questionsHtml = quizData.map((item, index) => `
-        <div class="quiz-question-box" style="margin-bottom: 20px;" data-question-id="${item.id}" data-type="text">
-            <p style="font-weight: 700; font-size: 1.1rem; margin-bottom: 10px;">${index + 1}. ${item.q}</p>
-            <input type="text" id="q_input_${item.id}" class="modal-input quiz-text-input" placeholder="Введите ответ (одно слово)">
-        </div>
-    `).join('');
-    
-    container.innerHTML = questionsHtml;
-    
-    const totalQuestions = quizData.length;
-    const successThreshold = Math.ceil(totalQuestions / 2) + 1;
-
-    document.getElementById('quizSubmitBtn').classList.remove('hidden');
-    document.getElementById('quizSubmitBtn').onclick = () => window.handleBulkSubmit(taskId, quizData);
-
-    scoreDisplay.innerHTML = `Всего вопросов: ${totalQuestions}. Требуется ${successThreshold} для успеха.`;
-};
-
-
-window.handleBulkSubmit = async (taskId, quizData) => {
-    let correctCount = 0;
-    const totalQuestions = quizData.length;
-    const successThreshold = Math.ceil(totalQuestions / 2) + 1;
-    
-    quizData.forEach((item) => {
-        const inputEl = document.getElementById(`q_input_${item.id}`);
-        if (!inputEl) return;
-        
-        const submittedAnswer = inputEl.value.trim();
-        inputEl.disabled = true;
-        
-        const correctAnswer = (item.a || '').toUpperCase(); 
-        
-        if (submittedAnswer.toUpperCase() === correctAnswer && correctAnswer.length > 0) {
-            correctCount++;
-            inputEl.style.backgroundColor = 'rgba(0, 214, 143, 0.2)';
-            inputEl.style.borderColor = 'var(--accent-green)';
-        } else {
-            inputEl.style.backgroundColor = 'rgba(217, 0, 38, 0.2)';
-            inputEl.style.borderColor = 'var(--accent-red)';
-            if (correctAnswer.length > 0) {
-                 inputEl.value = `${submittedAnswer} (❌ Ответ: ${item.a})`;
-            }
-        }
-    });
-
-    window.finalizeQuizResult(taskId, totalQuestions, correctCount, successThreshold);
-};
-
-window.finalizeQuizResult = async (taskId, totalQuestions, correctCount, successThreshold) => {
-    const resultMsg = document.getElementById('quizFinalMessage');
-    const container = document.getElementById('quizQuestionsContainer');
-    const passed = correctCount >= successThreshold;
-    
-    quizState.quizInProgress = false; 
-    document.getElementById('quizSubmitBtn')?.classList.add('hidden'); 
-    
-    if (passed) {
-        resultMsg.innerHTML = `<span style="color: var(--accent-green);">🎉 УСПЕХ! ${correctCount} из ${totalQuestions} верных. Задание №${taskId} выполнено!</span>`;
-        
-        const task = state.currentTeam.tasks.find(t => t.id === taskId);
-        if (task && !task.completed) {
-            let newInventory = { ...state.currentTeam.inventory };
-            
-            if (task.reward_item_id) { 
-                const rewardId = task.reward_item_id;
-                newInventory[rewardId] = (newInventory[rewardId] || 0) + 1;
-                alert(`🎉 Получена награда: ${state.globalItems[rewardId]?.name}!`);
-            }
-            
-            const newTasks = state.currentTeam.tasks.map(t => t.id === taskId ? {...t, completed: true} : t);
-            const result = await updateTaskAndInventory(state.me.team_id, newTasks, newInventory);
-            if (!result.success) {
-                console.error('Task auto-update error:', result.error);
-                alert('Ошибка автоматического сохранения задачи!');
-            }
-        }
-        
-    } else {
-        resultMsg.innerHTML = `<span style="color: var(--accent-red);">❌ ПРОВАЛ! Требуется ${successThreshold}.</span><br>Ваша команда будет ЗАМОРОЖЕНА на 2 минуты!`;
-        
-        const freezeDurationMs = 2 * 60 * 1000; 
-        await updateTeamFreezeStatus(state.me.team_id, freezeDurationMs);
-    }
-    
-    await refreshTeamData(); 
-    renderGameInterface();
-    
-    container.innerHTML = `<div style="text-align: center; margin-top: 20px;">
-                            <button class="start-button" onclick="window.closeModal('quizModal'); renderMarkers();">
-                                ЗАКРЫТЬ
-                            </button>
-                            </div>`;
-};
-
-
-// --- SECRET WORD LOGIC ---
-
-window.openSecretWordModal = (taskId, title, icon, description) => {
-    if (state.me.role !== 'leader') return alert("Только лидер может запускать задания с секретным словом!");
-
-    const modal = document.getElementById('secretWordModal');
-    
-    document.getElementById('swModalTitle').textContent = `ЗАДАНИЕ ${taskId}: ${title}`;
-    document.getElementById('swModalIcon').innerHTML = icon;
-    
-    const telegramLinkHTML = `<p style="font-size: 1.1rem; color: var(--text-main); margin-bottom: 15px;">${description}</p>`;
-    
-    document.getElementById('swModalDesc').innerHTML = telegramLinkHTML;
-    document.getElementById('swModalTelegramLink').href = TELEGRAM_GROUP_LINK;
-    
-    document.getElementById('swModalStatus').textContent = '';
-    document.getElementById('secretWordInput').value = '';
-    document.getElementById('secretWordInput').disabled = false;
-    document.getElementById('swModalSubmitBtn').disabled = false;
-    
-    document.getElementById('swModalSubmitBtn').setAttribute('onclick', `window.handleSecretWordSubmit(${taskId})`);
-    
-    modal.classList.remove('hidden');
-};
-
-window.handleSecretWordSubmit = async (taskId) => {
-    if (state.me.role !== 'leader') return alert("Только лидер может отправлять ответ!");
-    
-    const input = document.getElementById('secretWordInput');
-    const statusEl = document.getElementById('swModalStatus');
-    const correctWord = SECRET_WORDS[taskId]; 
-    
-    if (!correctWord) {
-        statusEl.textContent = 'Ошибка: Задание не настроено.';
-        statusEl.style.color = 'var(--accent-red)';
-        return;
-    }
-
-    const submittedWord = input.value.trim().toUpperCase();
-
-    if (submittedWord === correctWord.toUpperCase()) {
-        statusEl.textContent = '✅ Правильно! Задание выполнено.';
-        statusEl.style.color = 'var(--accent-green)';
-        input.disabled = true;
-        document.getElementById('swModalSubmitBtn').disabled = true;
-        
-        const task = state.currentTeam.tasks.find(t => t.id === taskId);
-        if (task && !task.completed) {
-            let newInventory = { ...state.currentTeam.inventory };
-            
-            if (task.reward_item_id) { 
-                const rewardId = task.reward_item_id;
-                newInventory[rewardId] = (newInventory[rewardId] || 0) + 1;
-                alert(`🎉 Получена награда: ${state.globalItems[rewardId]?.name}!`);
-            }
-            
-            const newTasks = state.currentTeam.tasks.map(t => t.id === taskId ? {...t, completed: true} : t);
-            const result = await updateTaskAndInventory(state.me.team_id, newTasks, newInventory);
-            if (!result.success) {
-                 console.error('Task auto-update error:', result.error);
-                 alert('Ошибка автоматического сохранения задачи!');
-            }
-            
-            await refreshTeamData();
-            renderGameInterface();
-        }
-        
-    } else {
-        statusEl.textContent = '❌ Неверное слово. Попробуйте еще раз.';
-        statusEl.style.color = 'var(--accent-red)';
-    }
-};
-
-// --- TIC TAC TOE LOGIC ---
-
-window.openTicTacToeModal = () => {
-    if (state.me.role !== 'leader') return alert("Только лидер может запускать финальную игру!");
-    
-    const modal = document.getElementById('ticTacToeModal');
-    const teamSelect = document.getElementById('tttTargetTeam');
-    
-    teamSelect.innerHTML = '<option value="">Выберите команду для вызова</option>';
-    state.otherTeams.forEach(t => {
-        const isFrozen = t.frozen_until && new Date(t.frozen_until) > new Date();
-        const frozenText = isFrozen ? ' (Заморожена!)' : '';
-        const isDisabled = isFrozen ? 'disabled' : '';
-
-        const opt = document.createElement('option');
-        opt.value = t.id;
-        opt.textContent = `${t.name_by_leader || t.name} ${TEAMS_UI_CONFIG[t.id]?.symbol || ''} ${frozenText}`;
-        opt.disabled = isDisabled;
-        teamSelect.appendChild(opt);
-    });
-
-    document.getElementById('tttSelectOpponent').classList.remove('hidden');
-    document.getElementById('tttGameContainer').classList.add('hidden');
-    document.getElementById('tttStatusMessage').textContent = 'Выберите команду и отправьте вызов:';
-    document.getElementById('gameBoardPlaceholder').innerHTML = '';
-    
-    modal.classList.remove('hidden');
-};
-
-window.sendGameChallenge = async () => {
-    if (state.me.role !== 'leader') return alert("Только лидер может отправлять вызов!");
-
-    const targetSelect = document.getElementById('tttTargetTeam');
-    const targetId = Number(targetSelect.value);
-    const targetName = targetSelect.options[targetSelect.selectedIndex].textContent;
-    
-    if (!targetId) return alert('Выберите команду!');
-    
-    document.getElementById('tttStatusMessage').textContent = `⏳ Вызов отправлен команде ${targetName}. Ожидайте результата.`;
-    document.getElementById('tttSelectOpponent').classList.add('hidden');
-    document.getElementById('tttGameContainer').classList.remove('hidden');
-    
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    const teamWon = Math.random() < 0.5; 
-    
-    window.handleTicTacToeResult(teamWon);
-};
-
-window.handleTicTacToeResult = async (attackerWon) => {
-    const taskId = 6;
-    let resultMessage;
-
-    if (attackerWon) {
-        resultMessage = `🎉 ПОБЕДА! Вы выиграли в Крестики-нолики! Задание №${taskId} выполнено!`;
-        
-        const task = state.currentTeam.tasks.find(t => t.id === taskId);
-        if (task && !task.completed) {
-            let newInventory = { ...state.currentTeam.inventory };
-            
-            if (task.reward_item_id) { 
-                const rewardId = task.reward_item_id;
-                newInventory[rewardId] = (newInventory[rewardId] || 0) + 1;
-                alert(`🎉 Получена награда: ${state.globalItems[rewardId]?.name}!`);
-            }
-            
-            const newTasks = state.currentTeam.tasks.map(t => t.id === taskId ? {...t, completed: true} : t);
-            const result = await updateTaskAndInventory(state.me.team_id, newTasks, newInventory);
-            if (!result.success) {
-                 console.error('Task auto-update error:', result.error);
-                 alert('Ошибка автоматического сохранения задачи!');
-            }
-        }
-    } else {
-        const freezeDurationMs = 2 * 60 * 1000;
-        resultMessage = `❌ ПОРАЖЕНИЕ! Ваша команда ЗАМОРОЖЕНА на 2 минуты. Повторная попытка будет доступна после разморозки.`;
-        
-        await updateTeamFreezeStatus(state.me.team_id, freezeDurationMs);
-    }
-    
-    await refreshTeamData(); 
-    renderGameInterface();
-
-    document.getElementById('tttStatusMessage').textContent = resultMessage;
-    document.getElementById('gameBoardPlaceholder').innerHTML = `<h3 style="color:${attackerWon ? 'var(--accent-green)' : 'var(--accent-red)'}; font-size: 1.5rem;">${attackerWon ? 'УСПЕХ' : 'ПОРАЖЕНИЕ'}!</h3>`;
-    
-    document.getElementById('tttGameContainer').innerHTML += `<button class="start-button" style="margin-top: 15px;" onclick="window.closeModal('ticTacToeModal'); renderGameInterface();">ГОТОВО</button>`;
-};
 
 // --- MAP POPUP LOGIC ---
 
@@ -963,9 +599,15 @@ function showPopup(item, type, id) {
 
     if (type === 'tent') {
         iconEl.innerHTML = '⛺';
-        if (['leader', 'Negotiator'].includes(state.me.role)) {
-            btns.innerHTML = `<button class="start-button" onclick="window.enterTent('${id}')">ПРИЙТИ В ПАЛАТКУ</button>`;
-            descEl.innerHTML += `<p style="margin-top:10px; font-size:0.9rem; color:var(--text-muted);">Приходите в эту палатку. Если другая команда придет сюда, начнется обмен.</p>`;
+        
+        if (['leader', 'Negotiator'].includes(Core.state.me.role)) {
+            descEl.innerHTML += `<p style="margin-top:15px; font-size:1rem; color:var(--accent-gold);">
+                                 Обмен теперь происходит путем прямого предложения. Используйте кнопку 
+                                 <span style="font-weight:bold; color:var(--accent-ice);">"ВХОДЯЩИЕ 💛"</span> в шапке
+                                 и кнопку "ПРЕДЛОЖИТЬ ОБМЕН" на этой карте, чтобы начать торговлю.
+                                 </p>`;
+            btns.innerHTML = `<button class="start-button" onclick="window.openTradeModal()">ПРЕДЛОЖИТЬ ОБМЕН</button>
+                              <button class="secondary" style="margin-top: 10px;" onclick="window.closeModal('interactionModal')">ЗАКРЫТЬ</button>`;
         } else {
             descEl.innerHTML += `<br><br><span class="muted" style="color:#ff5555">Только Лидер или Переговорщик могут инициировать обмен.</span>`;
             btns.innerHTML = `<button class="start-button" onclick="window.closeModal('interactionModal')">ЗАКРЫТЬ</button>`;
@@ -974,9 +616,9 @@ function showPopup(item, type, id) {
         iconEl.innerHTML = item.icon || '👤';
         btns.innerHTML = `<button class="start-button" onclick="window.closeModal('interactionModal')">ЗАКРЫТЬ</button>`;
     } else if (type === 'snow_pile') {
-        const isScavenger = state.me.role === 'Scavenger';
+        const isScavenger = Core.state.me.role === 'Scavenger';
         const now = Date.now();
-        const remaining = SCAVENGER_COOLDOWN_MS - (now - lastScavengeTime);
+        const remaining = Core.SCAVENGER_COOLDOWN_MS - (now - lastScavengeTime);
         const disabled = remaining > 0 || !isScavenger ? 'disabled' : '';
         const cooldownText = remaining > 0 
             ? `(Кулдаун: ${Math.floor(remaining / 1000)}с)` 
@@ -1004,24 +646,28 @@ function showMissionPopup(missionData) {
     
     descEl.innerHTML = `<p style="font-size: 1.1rem; color: var(--accent-gold); margin-bottom: 15px;">${missionData.taskText}</p><p class="muted">Вы на месте. Чтобы начать, нажмите кнопку ниже.</p>`;
     
-    if (state.me.role !== 'leader') {
-        btns.innerHTML = `<p style="color:var(--accent-red); margin-top:10px;">Только лидер может начать это задание.</p><button class="start-button" style="margin-top:10px;" onclick="window.closeModal('interactionModal')">ЗАКРЫТЬ</button>`;
-        modal.classList.remove('hidden');
-        return;
-    }
 
     let buttonAction = `window.routeTaskToModal(${missionData.taskId}); window.closeModal('interactionModal');`;
     let buttonText;
+    
+    const logicId = missionData.taskId > 6 ? missionData.taskId - 9 : missionData.taskId;
+    const isGroup101 = Core.state.me.team_id === 101 || Core.state.me.team_id === 103;
 
-    if (missionData.taskId === 1 || missionData.taskId === 4) {
-        buttonText = `ПЕРЕЙТИ К ЗАДАНИЮ ${missionData.taskId} (Викторина)`;
-    } else if ([2, 3, 5].includes(missionData.taskId)) {
-        buttonText = `ПЕРЕЙТИ К ЗАДАНИЮ ${missionData.taskId} (Секретное слово)`;
-    } else if (missionData.taskId === 6) {
-        buttonText = `ПЕРЕЙТИ К ЗАДАНИЮ 6 (Финал)`;
+    let isQuiz = false;
+    let isFinalGame = logicId === 6;
+
+    if (isGroup101) {
+        isQuiz = (logicId === 1 || logicId === 4);
     } else {
-        buttonText = "ЗАКРЫТЬ";
-        buttonAction = `window.closeModal('interactionModal')`;
+        isQuiz = (logicId === 2); 
+    }
+
+    if (isQuiz) {
+        buttonText = `ПЕРЕЙТИ К ЗАДАНИЮ ${missionData.taskId} (Викторина)`;
+    } else if (isFinalGame) {
+        buttonText = `ПЕРЕЙТИ К ЗАДАНИЮ ${missionData.taskId} (Финал)`;
+    } else {
+        buttonText = `ПЕРЕЙТИ К ЗАДАНИЮ ${missionData.taskId} (Секретное слово)`;
     }
     
     btns.innerHTML = `<button class="start-button" onclick="${buttonAction}">${buttonText}</button>`;
@@ -1032,42 +678,20 @@ function showMissionPopup(missionData) {
 // --- TENT LOGIC ---
 
 window.enterTent = async (tentId) => {
-    const descEl = document.getElementById('interactDesc');
-    const btns = document.getElementById('interactButtons');
-
-    descEl.innerHTML = `<div class="tent-waiting"><div class="loader-spinner"></div><p style="font-size:1.1rem; margin-bottom:5px;">Ждем другую команду...</p><p class="muted" style="font-size:0.8rem; line-height:1.4;">Когда вторая команда придет сюда, обмен произойдет автоматически.</p></div>`;
-    btns.innerHTML = `<button class="secondary" style="border:1px solid #555; color:#ccc;" onclick="window.leaveTent()">Отмена</button>`;
-    
-    const partner = await setTentStatus(tentId);
-    
-    if(partner) performExchange(partner);
+    window.closeModal('interactionModal');
+    Core.clearTentStatus(); 
+    window.openTradeModal();
 };
 
 window.leaveTent = async () => {
     window.closeModal('interactionModal');
-    await clearTentStatus(); 
+    await Core.clearTentStatus(); 
 };
-
-function performExchange(partner) {
-    const descEl = document.getElementById('interactDesc');
-    const btns = document.getElementById('interactButtons');
-    
-    if(document.getElementById('interactionModal').classList.contains('hidden')) {
-        clearTentStatus();
-        return;
-    }
-
-    descEl.innerHTML = `<div style="text-align:center; padding:20px;"><div style="font-size:3rem;">✅</div><h3 style="color:#00D68F; margin:10px 0;">ОБНАРУЖЕН ПАРТНЕР!</h3><p>Начало обмена с командой:</p><strong style="color:var(--accent-gold); font-size:1.2rem;">${partner.name_by_leader || partner.name}</strong></div>`;
-    btns.innerHTML = `<button class="start-button" onclick="window.leaveTent()">Готово</button>`;
-    
-    if(navigator.vibrate) navigator.vibrate([100, 50, 100]);
-}
-
 
 // --- TRADE LOGIC ---
 
 window.openTradeModal = () => {
-    if (!['leader', 'Negotiator'].includes(state.me.role)) {
+    if (!['leader', 'Negotiator'].includes(Core.state.me.role)) {
         alert('Только Лидер или Переговорщик могут предлагать обмен.');
         return;
     }
@@ -1077,14 +701,14 @@ window.openTradeModal = () => {
 
     const teamSelect = document.getElementById('tradeTargetTeam');
     teamSelect.innerHTML = '<option value="">Выберите команду</option>';
-    state.otherTeams.forEach(t => {
+    Core.state.otherTeams.forEach(t => {
         const opt = document.createElement('option');
         opt.value = t.id;
         opt.textContent = `${t.name_by_leader || t.name} ${TEAMS_UI_CONFIG[t.id]?.symbol || ''}`;
         teamSelect.appendChild(opt);
     });
 
-    const inv = state.currentTeam.inventory || {};
+    const inv = Core.state.currentTeam.inventory || {};
     const offerSel = document.getElementById('tradeOfferSelect');
     const reqSel = document.getElementById('tradeRequestSelect');
     offerSel.innerHTML = '<option value="">Что отдать? (У вас:)</option>';
@@ -1093,7 +717,7 @@ window.openTradeModal = () => {
     Object.entries(inv)
         .filter(([id, count]) => count > 0)
         .forEach(([id, count]) => {
-            const item = state.globalItems[id];
+            const item = Core.state.globalItems[id];
             if (!item) return;
 
             const opt1 = document.createElement('option');
@@ -1102,7 +726,7 @@ window.openTradeModal = () => {
             offerSel.appendChild(opt1);
         });
 
-    Object.values(state.globalItems).forEach(item => {
+    Object.values(Core.state.globalItems).forEach(item => {
         const opt2 = document.createElement('option');
         opt2.value = item.id;
         opt2.textContent = `${item.emoji || '🎁'} ${item.name}`;
@@ -1117,7 +741,7 @@ window.sendTradeRequest = async () => {
 
     if (!to || !offer || !request) return alert('Заполните все поля');
 
-    const res = await sendTradeRequest(to, offer, request);
+    const res = await Core.sendTradeRequest(to, offer, request);
     if (res.success) {
         alert('✅ Предложение отправлено! Ждите, пока команда-цель примет его.');
         window.closeModal('tradeModal');
@@ -1127,14 +751,14 @@ window.sendTradeRequest = async () => {
 };
 
 window.openIncomingTrades = async () => {
-    const trades = await fetchIncomingTrades();
+    const trades = await Core.fetchIncomingTrades();
     const list = document.getElementById('incomingTradesList');
     list.innerHTML = trades.length === 0 
         ? '<p class="muted" style="padding:15px;">Нет входящих предложений</p>'
         : trades.map(t => {
-            const offer = state.globalItems[t.offer_item_id];
-            const req = state.globalItems[t.request_item_id];
-            const myInv = state.currentTeam.inventory || {};
+            const offer = Core.state.globalItems[t.offer_item_id];
+            const req = Core.state.globalItems[t.request_item_id];
+            const myInv = Core.state.currentTeam.inventory || {};
             const canFulfill = (myInv[t.request_item_id] || 0) >= 1;
 
             return `<div class="incoming-trade-card"><p><strong>${t.from_team_name}</strong> предлагает:</p><p>📤 ${offer?.emoji || '📦'} ${offer?.name || '???'}</p><p>в обмен на:</p><p style="color:${canFulfill ? 'var(--accent-green)' : 'var(--accent-red)'}">📥 ${req?.emoji || '🎁'} ${req?.name || '???'} ${!canFulfill ? ' (у вас нет)' : ''}</p><div style="display:flex; gap:10px; margin-top:12px;"><button class="start-button" ${!canFulfill ? 'disabled' : ''} onclick="window.acceptTrade(${t.id})">Принять</button><button class="secondary" onclick="window.rejectTrade(${t.id})">Отклонить</button></div></div>`;
@@ -1144,10 +768,10 @@ window.openIncomingTrades = async () => {
 };
 
 window.acceptTrade = async (id) => {
-    const res = await respondToTrade(id, true);
+    const res = await Core.respondToTrade(id, true);
     if (res.success) {
         alert('Обмен выполнен!');
-        await refreshTeamData();
+        await Core.refreshTeamData();
         renderGameInterface();
         window.openIncomingTrades();
     } else {
@@ -1156,16 +780,16 @@ window.acceptTrade = async (id) => {
 };
 
 window.rejectTrade = async (id) => {
-    await respondToTrade(id, false);
+    await Core.respondToTrade(id, false);
     window.openIncomingTrades();
 };
 
-window.closeModal = (id) => document.getElementById(id).classList.add('hidden'); // Упрощенная функция закрытия
+window.closeModal = (id) => document.getElementById(id).classList.add('hidden'); 
 
 // --- UTILITY & EFFECTS ---
 
 function checkFreezeState() {
-    const isFrozen = state.currentTeam?.frozen_until && new Date(state.currentTeam.frozen_until) > new Date();
+    const isFrozen = Core.state.currentTeam?.frozen_until && new Date(Core.state.currentTeam.frozen_until) > new Date();
     const overlay = document.getElementById('iceOverlay');
     
     if(isFrozen && !wasFrozen) {
@@ -1197,7 +821,7 @@ window.openItemsGuide = () => {
     const tbody = document.querySelector('#itemsGuideModal tbody');
     if (!tbody) return;
 
-    tbody.innerHTML = Object.values(state.globalItems).map(i => {
+    tbody.innerHTML = Object.values(Core.state.globalItems).map(i => {
         const iconHtml = (i.emoji && i.emoji.startsWith('http')) 
             ? `<img src="${i.emoji}" alt="${i.name}" style="width: 40px; height: 40px; object-fit: contain; filter: drop-shadow(0 0 1px #FFF);">` 
             : `${i.emoji || '❓'}`;
@@ -1209,29 +833,21 @@ window.closeItemsGuide = () => window.closeModal('itemsGuideModal');
 
 
 // ----------------------------------------------------
-// ===== V. GLOBAL ACCESS & STARTUP =====
+// ===== V. GLOBAL ACCESS & STARTUP (Final Step) =====
 // ----------------------------------------------------
 
-// Make core functions globally accessible (window.)
+// Привязываем функции из MissionLogic, если они существуют
+// (Эта функция теперь вызывается внутри initGame)
+// if (MissionLogic) { ... } 
+
+
 window.renderMarkers = renderMarkers;
 window.showPopup = showPopup;
 window.showMissionPopup = showMissionPopup;
-window.openQuizModal = openQuizModal;
-window.renderSequentialQuestion = renderSequentialQuestion;
-window.handleSequentialAnswer = handleSequentialAnswer;
-window.renderBulkQuiz = renderBulkQuiz;
-window.handleBulkSubmit = handleBulkSubmit;
-window.finalizeQuizResult = finalizeQuizResult;
-window.openSecretWordModal = openSecretWordModal; 
-window.handleSecretWordSubmit = handleSecretWordSubmit;
-window.openTicTacToeModal = openTicTacToeModal; 
-window.sendGameChallenge = sendGameChallenge;
-window.handleTicTacToeResult = handleTicTacToeResult;
 window.toggleTask = window.toggleTask; 
-window.routeTaskToModal = routeTaskToModal; 
-window.handleItemUse = handleItemUse; 
-window.useGadget = handleItemUse; 
-window.handleScavengeInteraction = handleScavengeInteraction; 
+window.handleItemUse = window.handleItemUse; 
+window.useGadget = window.handleItemUse; 
+window.handleScavengeInteraction = window.handleScavengeInteraction; 
 
 window.openTradeModal = window.openTradeModal;
 window.sendTradeRequest = window.sendTradeRequest;

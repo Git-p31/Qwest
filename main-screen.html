@@ -44,7 +44,7 @@
                 <button id="btnShowTrades" class="secondary hidden" onclick="window.openIncomingTrades()">ВХОДЯЩИЕ 💛</button>
                 
                 <button id="btnSpyAction" class="icon-btn hidden" onclick="window.openSpyModal()" title="Шпионаж">🕵️‍♂️</button>
-                <button id="btnScavenge" class="icon-btn hidden" onclick="window.scavengeSnow()" title="Искать в снегу">🧤</button>
+                <button id="btnScavenge" class="icon-btn hidden" onclick="window.handleScavengeInteraction('dummy_snow_pile_id')" title="Искать в снегу">🧤</button>
                 <button id="btnGuardianWarm" class="icon-btn hidden" onclick="window.guardianWarmUp()" title="Согреть">🔥</button>
             </div>
         </header>
@@ -60,7 +60,7 @@
 
             <div id="map-container" class="map-wrapper card">
                 <div id="interactiveMap"></div>
-                <button id="btnLocate" class="locate-btn">📍 Где я?</button>
+                <button id="btnLocate" class="locate-btn" onclick="window.renderMarkers()">📍 Где я?</button>
                 
                 <div class="map-legend">
                     <div><span class="mark tent"></span> Палатка</div>
@@ -107,7 +107,7 @@
             <div class="modal-header-strip"></div>
             <div class="modal-top-row">
                 <h3 class="modal-title" id="interactTitle">...</h3>
-                <button class="modal-close" onclick="document.getElementById('interactionModal').classList.add('hidden')">×</button>
+                <button class="modal-close" onclick="window.closeModal('interactionModal')">×</button>
             </div>
             
             <div id="interactIcon" style="font-size: 4rem; margin: 10px 0;">⛺</div>
@@ -134,11 +134,11 @@
     </div>
 
     <div id="tradeModal" class="modal-backdrop hidden">
-        <div class="modal-content">
+         <div class="modal-content">
                <div class="modal-header-strip"></div>
                <div class="modal-top-row">
                  <h3 class="modal-title">💛 ПРЕДЛОЖИТЬ ОБМЕН</h3>
-                 <button class="modal-close" onclick="window.closeTradeModal()">×</button>
+                 <button class="modal-close" onclick="window.closeModal('tradeModal')">×</button>
              </div>
              <label class="label-accent">1. Кому:</label> 
              <select id="tradeTargetTeam" class="modal-input"></select>
@@ -147,7 +147,7 @@
              <label class="label-accent" style="color:var(--accent-red)">3. Просим:</label> 
              <select id="tradeRequestSelect" class="modal-input"></select>
              <button class="start-button" onclick="window.sendTradeRequest()">Отправить</button>
-         </div>
+          </div>
     </div>  
 
     <div id="incomingTradesModal" class="modal-backdrop hidden">
@@ -155,7 +155,7 @@
             <div class="modal-header-strip"></div>
             <div class="modal-top-row">
                 <h3 class="modal-title">📨 ВХОДЯЩИЕ</h3>
-                <button class="modal-close" onclick="window.closeIncomingTrades()">×</button>
+                <button class="modal-close" onclick="window.closeModal('incomingTradesModal')">×</button>
             </div>
             <div id="incomingTradesList"></div>
         </div>  
@@ -165,7 +165,7 @@
         <div class="modal-content" style="text-align: center; border: 2px solid var(--accent-gold);">
             <h1 id="endTitle" style="font-size: 2rem; margin-bottom: 10px; text-transform: uppercase;"></h1>
             <p id="endMessage" style="font-size: 1.1rem; color: var(--text-main); margin-bottom: 20px; line-height: 1.5;"></p>
-            <button id="btnCloseModal" class="start-button hidden" onclick="document.getElementById('endGameModal').classList.add('hidden')">Понятно</button>
+            <button id="btnCloseModal" class="start-button hidden" onclick="window.closeModal('endGameModal')">Понятно</button>
         </div>
     </div>
 
@@ -173,7 +173,7 @@
         <div class="modal-content">
             <div class="modal-top-row">
                 <h3 class="modal-title">❄️ ЗАМОРОЗИТЬ КОГО?</h3>
-                <button class="modal-close" onclick="window.closeTargetModal()">×</button>
+                <button class="modal-close" onclick="window.closeModal('targetModal')">×</button>
             </div>
             <p class="muted" style="margin-bottom: 15px;">Выберите команду, чтобы остановить их прогресс:</p>
             <select id="targetSelect" class="modal-input" style="margin-bottom: 20px;"></select>
@@ -188,7 +188,7 @@
             <div class="modal-header-strip" style="background: linear-gradient(90deg, #d946ef, #8b5cf6);"></div>
             <div class="modal-top-row">
                 <h3 class="modal-title" style="color: #d946ef;">⚒️ МАСТЕРСКАЯ</h3>
-                <button class="modal-close" onclick="document.getElementById('craftModal').classList.add('hidden')">×</button>
+                <button class="modal-close" onclick="window.closeModal('craftModal')">×</button>
             </div>
             <div id="craftRecipesList" style="max-height: 60vh; overflow-y: auto; padding-right: 5px;"></div>
         </div>
@@ -199,7 +199,7 @@
             <div class="modal-header-strip" style="background: repeating-linear-gradient(90deg, var(--accent-gold), var(--accent-gold) 20px, #b8860b 20px, #b8860b 40px);"></div>
             <div class="modal-top-row">
                 <h3 class="modal-title" id="quizModalTitle" style="color: var(--accent-gold);">📜 КВИЗ</h3>
-                <button class="modal-close" onclick="document.getElementById('quizModal').classList.add('hidden')">×</button>
+                <button class="modal-close" onclick="window.closeModal('quizModal')">×</button>
             </div>
             
             <div id="quizQuestionsContainer" style="max-height: 60vh; overflow-y: auto; padding-right: 5px;">
@@ -208,7 +208,7 @@
             <p id="quizScoreDisplay" class="muted" style="margin-top: 15px; font-weight: bold;"></p>
             <p id="quizFinalMessage" class="muted" style="margin-top: 5px; font-weight: bold; font-size: 1.1rem; color: var(--accent-red);"></p>
             
-            <button id="quizSubmitBtn" class="start-button hidden" style="margin-top: 20px;">
+            <button id="quizSubmitBtn" class="start-button hidden" style="margin-top: 20px;" onclick="window.handleBulkSubmit()">
                 ПРОВЕРИТЬ ОТВЕТЫ
             </button>
             </div>
@@ -219,7 +219,7 @@
             <div class="modal-header-strip" style="background: linear-gradient(90deg, #f1fa8c, #bd93f9);"></div>
             <div class="modal-top-row">
                 <h3 class="modal-title" id="swModalTitle">ЗАДАНИЕ С ФОТО/ВИДЕО</h3>
-                <button class="modal-close" onclick="document.getElementById('secretWordModal').classList.add('hidden')">×</button>
+                <button class="modal-close" onclick="window.closeModal('secretWordModal')">×</button>
             </div>
             
             <div id="swModalIcon" style="font-size: 4rem; margin: 10px 0; text-align: center;">📸</div>
@@ -246,7 +246,7 @@
             <div class="modal-header-strip" style="background: repeating-linear-gradient(45deg, #FF5555, #FF5555 10px, #8B0000 10px, #8B0000 20px);"></div>
             <div class="modal-top-row">
                 <h3 class="modal-title" style="color: var(--accent-red);">⚔️ КРЕСТИКИ-НОЛИКИ (ФИНАЛ)</h3>
-                <button class="modal-close" onclick="document.getElementById('ticTacToeModal').classList.add('hidden')">×</button>
+                <button class="modal-close" onclick="window.closeModal('ticTacToeModal')">×</button>
             </div>
             
             <div id="tttSelectOpponent">

@@ -35,15 +35,20 @@ export const CRAFT_RECIPES = [
 export const GADGET_POOL = [11, 12, 13]; 
 export const RESOURCE_POOL = [1, 2, 3, 4, 5]; 
 
-// ===== ДАННЫЕ ДЛЯ ЗАДАНИЙ 2, 3, 5 (СЕКРЕТНОЕ СЛОВО) =====
+// ===== ДАННЫЕ ДЛЯ ЗАДАНИЙ (СЕКРЕТНОЕ СЛОВО) =====
 export const SECRET_WORD_ITEM_ID = 14; 
 export const SECRET_WORDS = {
-    2: "ГЛИНТВЕЙН",
-    3: "ЗВЕЗДА",
-    5: "JINGLEBELLS"
+    2: "ГЛИНТВЕЙН", // Task 2 (101/103) - Cheapest item
+    3: "ЗВЕЗДА", // Task 3 (101/103) - Star form
+    5: "JINGLEBELLS", // Task 5 (101/103) - Sing a song
+    // НОВЫЕ СЕКРЕТНЫЕ СЛОВА ДЛЯ ГРУППЫ 102/104 (Tasks 10-15)
+    10: "ШАПКА", // Task 10 (Logic ID 1) - Новогодняя шапка (Assumed word)
+    12: "ЗВЕЗДА", // Task 12 (Logic ID 3) - Star form
+    13: "ФОНТАН", // Task 13 (Logic ID 4) - Год фонтана (Assumed word)
+    14: "JINGLEBELLS" // Task 14 (Logic ID 5) - Sing a song
 };
 
-// ===== СТРУКТУРА МАРШРУТОВ (ССЫЛАЕТСЯ НА NAME в map_points) =====
+// ===== СТРУКТУРА МАРШРУТОВ (ССЫЛАЕТСЯ НА NAME в map_points) - Обновлено с вашими данными =====
 export const MISSION_PATH_STRUCTURE = {
     '101_103': [ 
         {taskId: 1, stallName: 'Палатка №154 (Миссия 1)'},
@@ -54,12 +59,12 @@ export const MISSION_PATH_STRUCTURE = {
         {taskId: 6, stallName: 'Палатка №409 (ФИНАЛ)'},
     ],
     '102_104': [ 
-        {taskId: 1, stallName: 'Палатка №162 (Миссия 1)'},
-        {taskId: 2, stallName: 'Палатка №51 (Миссия 2)'},
-        {taskId: 3, stallName: 'Палатка №25 (Миссия 3)'},
-        {taskId: 4, stallName: 'Палатка №170 (Миссия 4)'},
-        {taskId: 5, stallName: 'Палатка №70 (Миссия 5)'},
-        {taskId: 6, stallName: 'Палатка №325 (ФИНАЛ)'},
+        {taskId: 10, stallName: 'Палатка №162 (Миссия 1)'},
+        {taskId: 11, stallName: 'Палатка №51 (Миссия 2)'},
+        {taskId: 12, stallName: 'Палатка №25 (Миссия 3)'},
+        {taskId: 13, stallName: 'Палатка №170 (Миссия 4)'},
+        {taskId: 14, stallName: 'Палатка №70 (Миссия 5)'},
+        {taskId: 15, stallName: 'Палатка №325 (ФИНАЛ)'},
     ],
 };
 
@@ -132,20 +137,34 @@ export async function fetchStaticMapPoints() {
 }
 
 export async function fetchQuizData(taskId, teamId) {
-    let query = supabase.from('quiz_data')
+    // 1. Определение имени таблицы на основе ID команды (новая логика)
+    let tableName = '';
+    if (teamId === 101 || teamId === 103) {
+        tableName = 'quiz_data_101_103';
+    } else if (teamId === 102 || teamId === 104) {
+        tableName = 'quiz_data_102_104';
+    } else {
+        console.error("Unknown team ID for quiz data fetch:", teamId);
+        return [];
+    }
+    
+    // 2. Используем taskId напрямую, без нормализации
+    let query = supabase.from(tableName)
         .select('*')
-        .eq('task_id', taskId);
+        .eq('task_id', taskId); 
         
-    if (taskId === 1) {
+    // 3. Адаптация логики team_id (если нужна) под новые ID
+    if (taskId === 1 || taskId === 10) { // Task 1 (ID 1) и Task 10 (ID 10)
         query = query.or(`team_id.eq.${teamId},team_id.is.null`);
-    } else if (taskId === 4) {
+    } else if (taskId === 4 || taskId === 13) { // Task 4 (ID 4) и Task 13 (ID 13)
         query = query.is('team_id', null);
     } 
+    // УДАЛЕНА СТАРАЯ ЛОГИКА НОРМАЛИЗАЦИИ: const dbTaskId = taskId > 6 ? taskId - 9 : taskId; 
 
     const { data, error } = await query;
 
     if (error) {
-        console.error("Error fetching quiz data:", error);
+        console.error("Error fetching quiz data from table " + tableName + ":", error);
         return [];
     }
     return data;
