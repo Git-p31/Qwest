@@ -18,6 +18,14 @@ const TELEGRAM_GROUP_LINK = 'https://t.me/stuttgart_quest_group';
 const MAX_SNOW_PILES = 5;
 window.TELEGRAM_GROUP_LINK = TELEGRAM_GROUP_LINK;
 
+// --- НОВАЯ ЛОГИКА: ПОРЯДОК МИССИЙ ---
+const TEAM_MISSION_SEQUENCES = {
+    101: [3, 4, 1, 2, 5, 6],
+    102: [10, 14, 12, 11, 13, 15],
+    103: [2, 4, 5, 3, 1, 6],
+    104: [14, 11, 10, 13, 12, 15]
+};
+
 const VALID_TASK_IDS = {
     101: [1, 2, 3, 4, 5, 6],
     103: [1, 2, 3, 4, 5, 6],
@@ -32,7 +40,7 @@ const LAST_CHANCE_DURATION_MS = 5 * 60 * 1000; // 5 минут (300,000 мс)
 const SNOW_SPAWN_INTERVAL_MS = 180000; // 3 минуты (180,000 мс)
 const FREEZE_DURATION_MS = 2 * 60 * 1000; // 2 минуты (120,000 мс)
 
-// --- ФИНАЛЬНЫЕ ТРЕБОВАНИЯ (На основе предоставленной таблицы) ---
+// --- ФИНАЛЬНЫЕ ТРЕБОВАНИЯ ---
 const FINAL_ITEM_REQUIREMENTS = {
     // Команда 101 (A): {1, 3, 5, 7, 9}
     101: { 1: 1, 3: 1, 5: 1, 7: 1, 9: 1 }, 
@@ -88,14 +96,14 @@ function assignMissionFunctionsToWindow() {
 // --- КОНЕЦ ФУНКЦИИ ПРИВЯЗКИ ---
 
 
-// ===== INITIALIZATION & CORE (Исправлено) =====
+// ===== INITIALIZATION & CORE =====
 async function initGame() {
     
-    // 1. Аутентификация игрока (заполняет Core.state.me)
+    // 1. Аутентификация игрока
     const player = await Core.authPlayer();
     if (!player) return alert("Ошибка входа! Игрок не найден.");
 
-    // 2. Динамический импорт логики заданий ПОСЛЕ аутентификации
+    // 2. Динамический импорт логики заданий
     const teamId = Core.state.me.team_id;
     try {
         if (teamId === 101 || teamId === 103) {
@@ -103,20 +111,15 @@ async function initGame() {
         } else if (teamId === 102 || teamId === 104) {
             MissionLogic = await import('./missions_102_104.js');
         } else {
-            // Если teamId существует, но не соответствует ожидаемым группам
             throw new Error("ID команды не соответствует ни одной группе заданий (101-104).");
         }
-        
-        // Привязка функций к window, чтобы они работали из HTML
         assignMissionFunctionsToWindow();
         
     } catch (e) {
         console.error("Критическая ошибка загрузки MissionLogic:", e);
-        // Используем alert из оригинального кода, который теперь корректно срабатывает
         alert("Ошибка: Логика заданий для вашей команды не загружена."); 
-        return; // Останавливаем инициализацию
+        return; 
     }
-
 
     document.getElementById('myNameHeader').textContent = Core.state.me.name;
     document.getElementById('myPlayerRole').textContent = Core.ROLES_DATA[Core.state.me.role] || Core.state.me.role;
@@ -129,29 +132,23 @@ async function initGame() {
         document.getElementById('btnShowTrades')?.classList.remove('hidden');
     }
     
-    // Показать кнопку принудительного запуска только Лидеру
     if (Core.state.me.role === 'leader') {
         document.getElementById('btnForceLastChance')?.classList.remove('hidden');
     }
 
-
     staticMapPoints = await Core.fetchStaticMapPoints();
-    
     await Core.fetchAllTeamsData();
     await Core.refreshTeamData();
     
     initMapLogic();
     renderGameInterface();
     createSnowEffect();
-    
     startSnowPileSpawning(); 
     
-    // Проверяем, был ли таймер принудительно запущен ранее
     if (sessionStorage.getItem(LAST_CHANCE_FORCED_FLAG) === 'true') {
         lastChanceActive = true;
     }
     
-    // Устанавливаем интервал проверки таймеров
     setInterval(checkGlobalWinCondition, 1000); 
 
     Core.setupRealtimeListeners(
@@ -233,9 +230,21 @@ function renderTasks() {
     tbody.innerHTML = '';
     
     const teamId = Core.state.me.team_id;
+    // Оставляем это для отображения всех задач в списке, но не для логики карты
     const validIds = VALID_TASK_IDS[teamId] || []; 
     
-    const tasks = (Core.state.currentTeam.tasks || []).filter(t => validIds.includes(t.id));
+    // Сортируем задачи в списке согласно новой последовательности для удобства
+    const sequence = TEAM_MISSION_SEQUENCES[teamId] || [];
+    let tasks = (Core.state.currentTeam.tasks || []).filter(t => validIds.includes(t.id));
+    
+    // Сортировка: сначала задачи из sequence в правильном порядке
+    tasks.sort((a, b) => {
+        const idxA = sequence.indexOf(a.id);
+        const idxB = sequence.indexOf(b.id);
+        if (idxA === -1) return 1;
+        if (idxB === -1) return -1;
+        return idxA - idxB;
+    });
 
     let completedCount = 0;
 
@@ -269,7 +278,6 @@ function renderTasks() {
     
     progressEl.textContent = Math.round((completedCount / tasks.length) * 100) + '%';
     
-    // Проверка на победу (п. 3 и 6)
     if (tasks.filter(t => MAIN_MISSION_IDS.includes(t.id)).every(t => t.completed) && !hasShownVictory) {
         hasShownVictory = true;
         const finalStall = (teamId === 101 || teamId === 103) ? 'Палатка №409 (ФИНАЛ)' : 'Палатка №325 (ФИНАЛ)';
@@ -314,7 +322,6 @@ function initMapLogic() {
     map.on('click', () => window.closeModal('interactionModal'));
 
     renderMarkers();
-    // Симуляция движения других команд
     setInterval(() => {
         Core.state.otherTeams.forEach(t => {
             t.x = Math.max(10, Math.min(90, t.x + (Math.random() - 0.5) * 2)); 
@@ -324,15 +331,28 @@ function initMapLogic() {
     }, 3000);
 }
 
-// ===== ИСПРАВЛЕННАЯ ФУНКЦИЯ findActiveMission =====
+// ===== НОВАЯ ЛОГИКА ПОИСКА АКТИВНОЙ МИССИИ =====
 function findActiveMission(tasks) {
     if (!tasks || tasks.length === 0) return null;
     
     const teamId = Core.state.me.team_id;
-    const validIds = VALID_TASK_IDS[teamId] || [];
-    const activeTask = tasks.find(t => !t.completed && validIds.includes(t.id));
     
-    // --- CHECK FINAL MISSION LOCK (NEW LOGIC) ---
+    // 1. Получаем жесткую последовательность для этой команды
+    const sequence = TEAM_MISSION_SEQUENCES[teamId];
+    if (!sequence) return null;
+
+    let activeTask = null;
+
+    // 2. Ищем первую задачу в последовательности, которая НЕ выполнена
+    for (const id of sequence) {
+        const task = tasks.find(t => t.id === id);
+        if (task && !task.completed) {
+            activeTask = task;
+            break; // Нашли! Дальше не идем.
+        }
+    }
+
+    // --- ЛОГИКА ФИНАЛЬНОГО ЗАМКА (Осталась прежней) ---
     const finalMissionId = (teamId === 101 || teamId === 103) ? 6 : 15;
     
     if (activeTask && activeTask.id === finalMissionId) {
@@ -340,11 +360,9 @@ function findActiveMission(tasks) {
         const inventory = Core.state.currentTeam.inventory || {};
         let requirementsMet = true;
         
-        // Iterate over required items and check inventory count
         for (const itemId in requiredItems) {
             const requiredCount = requiredItems[itemId];
             const currentCount = inventory[itemId] || 0;
-            
             if (currentCount < requiredCount) {
                 requirementsMet = false;
                 break;
@@ -352,35 +370,32 @@ function findActiveMission(tasks) {
         }
 
         if (!requirementsMet) {
-            // Команда НЕ собрала все предметы. Блокируем миссию.
             const stallName = (teamId === 101 || teamId === 103) ? 'Палатка №409 (ФИНАЛ)' : 'Палатка №325 (ФИНАЛ)';
-            
             return {
                 id: 'mission_locked', 
-                type: 'final_lock', // ТИП МАРКЕРА: ФИНАЛЬНЫЙ ЗАМОК
+                type: 'final_lock', 
                 x: staticMapPoints.find(p => p.title === stallName)?.x || 50,
                 y: staticMapPoints.find(p => p.title === stallName)?.y || 50,
                 title: '🔒 ФИНАЛ ЗАБЛОКИРОВАН', 
                 desc: 'Необходимо собрать все финальные предметы. Проверьте ваш рюкзак и Миссии.',
                 icon: '🔒',
-                requiredItems: requiredItems // ПЕРЕДАЕМ ТРЕБОВАНИЯ
+                requiredItems: requiredItems 
             };
         }
     }
-    // --- END FINAL MISSION LOCK CHECK ---
+    // --- КОНЕЦ ЛОГИКИ ЗАМКА ---
 
     if (!activeTask) return null; 
 
+    // Определяем координаты для активной задачи
     let pathKey = '';
-    if (Core.state.me.team_id === 101 || Core.state.me.team_id === 103) {
-        pathKey = '101_103';
-    } else if (Core.state.me.team_id === 102 || Core.state.me.team_id === 104) {
-        pathKey = '102_104';
-    }
+    if (teamId === 101 || teamId === 103) pathKey = '101_103';
+    else if (teamId === 102 || teamId === 104) pathKey = '102_104';
 
     const pathSequence = Core.MISSION_PATH_STRUCTURE[pathKey];
     if (!pathSequence) return null;
 
+    // Ищем в структуре путей именно по ID задачи (activeTask.id), а не по индексу
     const missionStep = pathSequence.find(p => p.taskId === activeTask.id);
     if (!missionStep) return null;
 
@@ -404,7 +419,6 @@ function renderMarkers() {
     
     const mission = findActiveMission(Core.state.currentTeam.tasks);
 
-    // Всегда отрисовываем статические точки (палатки, NPC)
     staticMapPoints.forEach(item => {
         if (mission && item.title === mission.title) return;
         if (item.type === 'tent' || item.type === 'npc') {
@@ -412,7 +426,6 @@ function renderMarkers() {
         }
     });
 
-    // АКТИВНАЯ МИССИЯ: Отрисовываем только если найдена
     if (mission) {
         updateMarker(mission.id, mission.type, mission.x, mission.y, mission.title, mission, '🎯');
     }
@@ -443,7 +456,6 @@ function updateMarker(id, type, x, y, label, data, customSymbol) {
         const m = L.marker(loc, {icon: icon}).addTo(map);
         m.on('click', (e) => { 
             L.DomEvent.stopPropagation(e); 
-            // ОБРАБОТЧИК КЛИКОВ (Обновлен)
             if (type === 'final_lock') {
                 window.openFinalLockModal(data.requiredItems);
             } else if (type === 'mission_stall') { 
@@ -539,10 +551,8 @@ window.routeTaskToModal = (taskId) => {
     }
     
     if (MissionLogic && MissionLogic.routeTaskToModal) {
-        // Вызываем функцию из импортированного модуля заданий
         MissionLogic.routeTaskToModal(taskId);
     } else {
-        // Эта ветка теперь должна быть недостижима, если initGame отработал корректно
         alert("Ошибка: Логика заданий для вашей команды не загружена.");
     }
 };
@@ -564,16 +574,12 @@ window.handleItemUse = async (id) => {
 
         if ((Core.state.currentTeam.inventory[id] || 0) < 1) return alert("У вас нет этого гаджета.");
         
-        // useGadgetLogic обновляет Core.state.lastGadgetUsage только при успехе
         const res = await Core.useGadgetLogic(id, targetId); 
         if(res.success) {
-            // ИСПОЛЬЗУЕМ СТАРУЮ, РАБОЧУЮ DB ЛОГИКУ ДЛЯ ЗАМОРОЗКИ (Core.updateTeamFreezeStatus)
             const freezeDurationMs = FREEZE_DURATION_MS;
             await Core.updateTeamFreezeStatus(targetId, freezeDurationMs);
             
-            // Если заморозили себя, запускаем таймер немедленно
             if (targetId === Core.state.me.team_id) {
-                // Вызываем refresh, чтобы получить новый frozen_until и запустить таймер
                 await Core.refreshTeamData(); 
             }
             
@@ -581,7 +587,7 @@ window.handleItemUse = async (id) => {
         } else {
             alert(res.msg);
         }
-        await Core.refreshTeamData(); // Final refresh
+        await Core.refreshTeamData(); 
         renderGameInterface();
     } else {
         alert("Гаджет не настроен для использования.");
@@ -590,7 +596,7 @@ window.handleItemUse = async (id) => {
 
 window.openCraftModal = () => {
     if(Core.state.me.role !== 'Explorer') return alert("Только Исследователь!");
-    window.closeModal('craftModal'); // Закрыть предыдущее, если открыто
+    window.closeModal('craftModal'); 
     document.getElementById('craftModal').classList.remove('hidden');
     renderCraftUI();
 };
@@ -818,17 +824,14 @@ window.openTradeModal = () => {
     offerSel.innerHTML = '<option value="">Что отдать? (У вас:)</option>';
     reqSel.innerHTML = '<option value="">Что получить?</option>';
 
-    // Функция-помощник для определения, что отображать в <option>
     const getDisplayEmoji = (item) => {
-        // Если item.emoji начинается с 'http', это ссылка (изображение), используем запасной эмодзи
         if (item.emoji && item.emoji.startsWith('http')) {
-            return '🎁'; // Запасной эмодзи, т.к. PNG не работает в <option>
+            return '🎁'; 
         }
-        return item.emoji || '📦'; // Используем Юникод или запасной '📦'
+        return item.emoji || '📦'; 
     };
 
 
-    // 1. Формирование списка "Что отдать?"
     Object.entries(inv)
         .filter(([id, count]) => count > 0)
         .forEach(([id, count]) => {
@@ -843,7 +846,6 @@ window.openTradeModal = () => {
             offerSel.appendChild(opt1);
         });
 
-    // 2. Формирование списка "Что получить?"
     Object.values(Core.state.globalItems).forEach(item => {
         const displayEmoji = getDisplayEmoji(item);
 
@@ -874,17 +876,13 @@ window.openIncomingTrades = async () => {
     const trades = await Core.fetchIncomingTrades();
     const list = document.getElementById('incomingTradesList');
     
-    // NEW: Helper function to render the item icon correctly (image or emoji)
     const renderItemDisplay = (item) => {
         if (!item) return '???';
         const emoji = item.emoji;
         
         if (emoji && emoji.startsWith('http')) {
-            // It's a URL, render as image
-            // We use vertical-align: middle and width/height 25px for compact display
             return `<img src="${emoji}" alt="${item.name}" style="width: 25px; height: 25px; object-fit: contain; vertical-align: middle; margin-right: 5px;"> ${item.name}`;
         }
-        // It's an emoji/text, use a Unicode symbol
         return `${emoji || '🎁'} ${item.name}`;
     };
 
@@ -896,7 +894,6 @@ window.openIncomingTrades = async () => {
             const myInv = Core.state.currentTeam.inventory || {};
             const canFulfill = (myInv[t.request_item_id] || 0) >= 1;
 
-            // Logic to display team avatar
             const avatarHtml = t.from_team_selfie 
                 ? `<img src="${t.from_team_selfie}" style="width: 30px; height: 30px; border-radius: 50%; object-fit: cover; vertical-align: middle; margin-right: 10px;">`
                 : `<div style="width: 30px; height: 30px; border-radius: 50%; background: #333; display: inline-flex; align-items: center; justify-content: center; font-size: 1.2rem; margin-right: 10px;">${window.TEAMS_UI_CONFIG[t.from_team_id]?.symbol || '👥'}</div>`;
@@ -939,73 +936,56 @@ window.closeModal = (id) => document.getElementById(id).classList.add('hidden');
 
 // --- FREEZE TIMER LOGIC ---
 
-// 1. Запуск таймера заморозки
 function startFreezeTimer(endTime) {
     if (freezeTimerInterval) clearInterval(freezeTimerInterval);
 
-    // Показываем оверлей
     document.getElementById('freezeOverlay')?.classList.remove('hidden');
-    document.body.classList.add('frozen-mode'); // Добавляем класс, чтобы заблокировать интерфейс
+    document.body.classList.add('frozen-mode'); 
 
-    // Запускаем интервал
     freezeTimerInterval = setInterval(updateFreezeTimerDisplay, 1000);
-    updateFreezeTimerDisplay(); // Немедленное обновление
+    updateFreezeTimerDisplay(); 
 }
 
-// 2. Обновление отображения и проверка окончания
 function updateFreezeTimerDisplay() {
-    // ПАРСИМ frozen_until (ISO STRING) В MILLISECONDS
     const freezeUntilISO = Core.state.currentTeam?.frozen_until;
     
-    // Если поле пустое, прекращаем
     if (!freezeUntilISO) {
         stopFreezeTimer();
         return;
     }
     
-    const freezeEndTime = new Date(freezeUntilISO).getTime(); // ПАРСИМ СТРОКУ В ЧИСЛО
+    const freezeEndTime = new Date(freezeUntilISO).getTime(); 
     
     const remaining = freezeEndTime - Date.now();
     const timerEl = document.getElementById('freezeCountdown');
 
     if (remaining > 0) {
-        // Отображение оставшегося времени
         const minutes = Math.floor(remaining / 60000).toString().padStart(2, '0');
         const seconds = Math.floor((remaining % 60000) / 1000).toString().padStart(2, '0');
         if (timerEl) timerEl.textContent = `${minutes}:${seconds}`;
         
     } else {
-        // Время вышло - размораживаем!
         stopFreezeTimer();
-        
-        // Отправляем запрос на сервер, чтобы сбросить статус заморозки (Удаляем ISO строку)
         Core.updateTeam({ frozen_until: null }); 
-        
         alert("🎉 ВЫ РАЗМОРОЖЕНЫ! Можете двигаться дальше.");
     }
 }
 
-// 3. Остановка таймера
 function stopFreezeTimer() {
     if (freezeTimerInterval) {
         clearInterval(freezeTimerInterval);
         freezeTimerInterval = null;
     }
     
-    // Скрываем оверлей и убираем класс блокировки
     document.getElementById('freezeOverlay')?.classList.add('hidden');
     document.body.classList.remove('frozen-mode');
 }
 
-// НОВАЯ ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ТРИГГЕРА ЗАМОРОЗКИ (например, после провала в квизе)
 window.handleQuizFailure = async (teamId) => {
     const freezeDurationMs = FREEZE_DURATION_MS;
-    
-    // 1. Отправляем запрос на сервер для установки времени заморозки
     const result = await Core.updateTeamFreezeStatus(teamId, freezeDurationMs);
     
     if (result.success && teamId === Core.state.me.team_id) {
-        // 2. Если это наша команда, запускаем полный рефреш, который активирует UI таймер
         await Core.refreshTeamData();
         alert(`❌ Неправильный ответ! Вы заморожены на ${FREEZE_DURATION_MS / 60000} минуты.`);
     } else if (!result.success) {
@@ -1017,19 +997,16 @@ window.handleQuizFailure = async (teamId) => {
 // --- UTILITY & EFFECTS ---
 
 function checkFreezeState() {
-    // НОВАЯ ЛОГИКА: Проверка заморозки через frozen_until (ISO STRING)
     const freezeUntilISO = Core.state.currentTeam?.frozen_until;
     const freezeEndTime = freezeUntilISO ? new Date(freezeUntilISO).getTime() : 0;
     const isFrozenInDB = freezeEndTime > Date.now();
     
-    // Активация/синхронизация таймера
     if (isFrozenInDB && !freezeTimerInterval) {
         startFreezeTimer(freezeEndTime);
     } else if (!isFrozenInDB && freezeTimerInterval) {
         stopFreezeTimer();
     }
     
-    // СТАРАЯ ЛОГИКА (iceOverlay): сохраняем для визуального оверлея
     const isFrozenLegacy = freezeUntilISO && new Date(freezeUntilISO) > new Date(); 
     const overlay = document.getElementById('iceOverlay');
     
@@ -1042,20 +1019,16 @@ function checkFreezeState() {
     }
 }
 
-// Новая функция: Проверка глобальной победы (включает логику "Последнего Шанса")
 async function checkGlobalWinCondition() {
     if (!Core.state.me) return;
 
-    // 1. Проверяем, активен ли "Последний Шанс" (автоматически или вручную)
     if (lastChanceActive || sessionStorage.getItem(LAST_CHANCE_FORCED_FLAG) === 'true') {
         const timerEl = document.getElementById('timerCountdown');
         const timerBox = document.getElementById('lastChanceTimer');
         
-        // Убедимся, что время окончания установлено, если мы только что перезагрузили страницу с флагом FORCE
         if (lastChanceEndTime === 0 && sessionStorage.getItem('lastChanceEndTime')) {
              lastChanceEndTime = Number(sessionStorage.getItem('lastChanceEndTime'));
         } else if (lastChanceEndTime === 0) {
-            // Если таймер принудительно запущен, но время не установлено (редкий случай), установим его
             window.forceLastChance(); 
             return;
         }
@@ -1066,16 +1039,14 @@ async function checkGlobalWinCondition() {
             const minutes = Math.floor(remaining / 60000);
             const seconds = Math.floor((remaining % 60000) / 1000).toString().padStart(2, '0');
             timerEl.textContent = `${minutes}:${seconds}`;
-            timerBox.classList.remove('hidden'); // Показываем таймер
+            timerBox.classList.remove('hidden'); 
             lastChanceActive = true;
         } else {
-            // Таймер истек
             timerBox.classList.add('hidden');
             lastChanceActive = false;
             sessionStorage.removeItem('lastChanceEndTime');
-            sessionStorage.removeItem(LAST_CHANCE_FORCED_FLAG); // Снимаем флаг принудительного запуска
+            sessionStorage.removeItem(LAST_CHANCE_FORCED_FLAG); 
             
-            // НОВАЯ ЛОГИКА: Конец игры для проигравших
             if (!isTeamVictorious()) {
                 window.showLostModal();
             }
@@ -1083,7 +1054,6 @@ async function checkGlobalWinCondition() {
         return; 
     }
 
-    // 2. Если таймер НЕ активен вручную, проверяем автоматическое условие
     const globalState = await Core.fetchGlobalGameState();
     const winningTeamIds = [];
 
@@ -1102,7 +1072,6 @@ async function checkGlobalWinCondition() {
     const currentTeamWon = winningTeamIds.includes(currentTeamId);
 
     if (winningTeamIds.length >= 2 && !currentTeamWon) {
-        // АВТОМАТИЧЕСКИЙ ЗАПУСК: 
         const timerEl = document.getElementById('lastChanceTimer');
         timerEl.classList.remove('hidden');
         
@@ -1119,7 +1088,6 @@ async function checkGlobalWinCondition() {
         checkGlobalWinCondition(); 
 
     } else if (winningTeamIds.length < 2) {
-        // Менее 2 команд победили, скрываем таймер
         document.getElementById('lastChanceTimer').classList.add('hidden');
         lastChanceActive = false;
         sessionStorage.removeItem('lastChanceEndTime');
@@ -1136,14 +1104,12 @@ window.showLostModal = () => {
     const modal = document.getElementById('endGameModal');
     document.getElementById('endTitle').textContent = "❌ ВРЕМЯ ИСТЕКЛО";
     document.getElementById('endMessage').textContent = "К сожалению, время, отведенное на квест, закончилось. Вы не успели спасти Рождество. Пожалуйста, пройдите к организаторам.";
-    document.getElementById('btnCloseModal').classList.remove('hidden'); // Allow them to close it
+    document.getElementById('btnCloseModal').classList.remove('hidden'); 
     modal.classList.remove('hidden');
     
-    // Optionally: add a class to body to prevent all clicks/scrolling/interaction
     document.body.classList.add('game-over-mode');
 };
 
-// НОВЫЕ ФУНКЦИИ ДЛЯ РУЧНОГО ЗАПУСКА "ПОСЛЕДНЕГО ШАНСА" (из предыдущего запроса)
 window.confirmForceLastChance = () => {
     if (!Core.state.me || Core.state.me.role !== 'leader') return alert("Нет доступа.");
     
@@ -1171,14 +1137,12 @@ window.forceLastChance = () => {
     checkGlobalWinCondition(); 
 }
 
-// Новая функция: Отображение модального окна победы (п. 3)
 window.showVictoryModal = (title, message) => {
     const modal = document.getElementById('endGameModal');
     document.getElementById('endTitle').textContent = title;
     document.getElementById('endMessage').textContent = message;
     document.getElementById('btnCloseModal').classList.remove('hidden');
     modal.classList.remove('hidden');
-    // Останавливаем интервал спавна сугробов и таймер последнего шанса
     clearInterval(snowSpawnInterval);
     document.getElementById('lastChanceTimer').classList.add('hidden'); 
     lastChanceActive = false;
@@ -1220,7 +1184,6 @@ window.closeItemsGuide = () => window.closeModal('itemsGuideModal');
 // ===== V. GLOBAL ACCESS & STARTUP (Final Step) =====
 // ----------------------------------------------------
 
-// ФИКС BUG 1: Явно делаем renderGameInterface глобальной функцией
 window.renderGameInterface = renderGameInterface;
 
 
@@ -1247,38 +1210,31 @@ window.doCraft = doCraft;
 window.leaveTent = window.leaveTent;
 window.enterTent = window.enterTent;
 
-
 // =======================================================
 // ===== NEW MODAL FUNCTIONS (Must be at the end) =====
 // =======================================================
 
-// Функция открытия красивого окна блокировки
 window.openFinalLockModal = (requirements) => {
     const modal = document.getElementById('finalLockModal');
     const grid = document.getElementById('finalItemsGrid');
     const btn = document.getElementById('btnActivateFinal');
     const status = document.getElementById('finalLockStatus');
     
-    // Очищаем сетку
     grid.innerHTML = '';
     
     const inventory = Core.state.currentTeam.inventory || {};
     let allCollected = true;
 
-    // Проходимся по списку требуемых предметов
     for (const [itemId, countNeeded] of Object.entries(requirements)) {
-        // Получаем данные о предмете (иконку/название)
         const itemData = Core.state.globalItems[itemId];
         const hasCount = inventory[itemId] || 0;
         const isCollected = hasCount >= countNeeded;
 
         if (!isCollected) allCollected = false;
 
-        // Создаем div для слота
         const slot = document.createElement('div');
         slot.className = `lock-item-slot ${isCollected ? 'collected' : 'missing'}`;
         
-        // Вставляем контент (картинку или эмодзи)
         if (itemData && itemData.emoji && itemData.emoji.startsWith('http')) {
             slot.innerHTML = `<img src="${itemData.emoji}" alt="${itemData.name}">`;
         } else {
@@ -1288,7 +1244,6 @@ window.openFinalLockModal = (requirements) => {
         grid.appendChild(slot);
     }
 
-    // Настройка кнопки Активировать
     if (allCollected) {
         btn.disabled = false;
         status.innerHTML = '<span style="color:#50fa7b">ГОТОВО К АКТИВАЦИИ!</span>';
@@ -1300,10 +1255,9 @@ window.openFinalLockModal = (requirements) => {
     modal.classList.remove('hidden');
 };
 
-// Простая заглушка для кнопки Активировать
 window.tryActivateFinal = () => {
     document.getElementById('finalLockModal').classList.add('hidden');
-    renderMarkers(); // Обновляем карту
+    renderMarkers(); 
     alert("Проверка завершена. Если все условия выполнены, задание откроется!");
 };
 
