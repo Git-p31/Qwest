@@ -266,7 +266,15 @@
             </div>
         </div>
     </div>
-
+    <div id="freezeOverlay" class="freeze-overlay hidden">
+    <div id="freezeOverlay" class="modal-backdrop hidden" style="z-index: 10001; background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(8px);">
+        <div class="modal-content" style="text-align: center; border: 2px solid var(--accent-ice); max-width: 400px; padding: 40px;">
+            <h1 style="color: var(--accent-ice); margin-bottom: 10px;">🥶 КОМАНДА ЗАМОРОЖЕНА 🥶</h1>
+            <p style="font-size: 1.1rem; color: var(--text-muted); margin-bottom: 25px;">Вы не можете двигаться и взаимодействовать с большинством объектов.</p>
+            <p style="font-size: 1.2rem; font-weight: 700; color: var(--accent-gold);">До разморозки осталось:</p>
+            <div id="freezeCountdown" style="font-size: 3rem; font-weight: 900; color: var(--accent-ice); margin-top: 10px;">00:00</div>
+        </div>
+    </div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     
     <script type="module" src="game.js"></script>

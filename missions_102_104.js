@@ -27,6 +27,16 @@ export const openQuizModal = async (taskId) => {
     const titleEl = document.getElementById('quizModalTitle');
     const teamId = Core.state.me.team_id;
 
+    // НОВОЕ: Проверка статуса миссии перед загрузкой вопросов
+    const currentTask = Core.state.currentTeam?.tasks?.find(t => t.id === taskId);
+    if (currentTask && currentTask.completed) {
+        modal.classList.remove('hidden');
+        titleEl.textContent = QUIZ_TITLES[taskId] || `ЗАДАНИЕ ${taskId} (КВИЗ)`;
+        quizContent.innerHTML = '<p class="muted" style="text-align: center;">✅ Это задание уже выполнено вашей командой!</p>';
+        document.getElementById('quizSubmitBtn')?.classList.add('hidden');
+        return;
+    }
+
     quizContent.innerHTML = '<div style="text-align: center; padding: 20px;">Загрузка вопросов...</div>';
     document.getElementById('quizFinalMessage').innerHTML = '';
     document.getElementById('quizScoreDisplay').innerHTML = '';
@@ -77,7 +87,7 @@ export const renderSequentialQuestion = () => {
     let optionsArray = [];
     let optionsString = currentItem.options;
     
-    // --- Парсинг опций ---
+    // --- Парсинг опций остается без изменений ---
     const match = String(optionsString).trim().match(/^\((\d+)\)\s*(.*)/);
     if (match) { optionsString = match[2]; }
     
@@ -254,8 +264,11 @@ export const finalizeQuizResult = async (taskId, totalQuestions, correctCount, s
     } else {
         resultMsg.innerHTML = `<span style="color: var(--accent-red);">❌ ПРОВАЛ! Требуется ${successThreshold}.</span><br>Ваша команда будет ЗАМОРОЖЕНА на 2 минуты!`;
         
-        const freezeDurationMs = 2 * 60 * 1000; 
+        const freezeDurationMs = 2 * 60 * 1000;
+        
+        // НОВАЯ ЛОГИКА ЗАМОРОЗКИ
         await Core.updateTeamFreezeStatus(Core.state.me.team_id, freezeDurationMs);
+        window.handleQuizFailure(Core.state.me.team_id);
     }
     
     await Core.refreshTeamData(); 
@@ -456,13 +469,16 @@ export const handleTicTacToeResult = async (attackerWon) => {
         }
     } else {
         const freezeDurationMs = 2 * 60 * 1000;
+        
         resultMessage = `❌ ПОРАЖЕНИЕ! Ваша команда ЗАМОРОЖЕНА на 2 минуты. Повторная попытка будет доступна после разморозки.`;
         
+        // НОВАЯ ЛОГИКА ЗАМОРОЗКИ
         await Core.updateTeamFreezeStatus(Core.state.me.team_id, freezeDurationMs);
+        window.handleQuizFailure(Core.state.me.team_id);
     }
     
     await Core.refreshTeamData(); 
-    window.renderGameInterface();
+    window.renderGameInterface(); 
 
     document.getElementById('tttStatusMessage').textContent = resultMessage;
     document.getElementById('gameBoardPlaceholder').innerHTML = `<h3 style="color:${attackerWon ? 'var(--accent-green)' : 'var(--accent-red)'}; font-size: 1.5rem;">${attackerWon ? 'УСПЕХ' : 'ПОРАЖЕНИЕ'}!</h3>`;
@@ -498,6 +514,12 @@ export const routeTaskToModal = (taskId) => {
 };
 
 
-// !!! УДАЛЕНЫ ПРЯМЫЕ ПРИВЯЗКИ К WINDOW, ЧТОБЫ ИЗБЕЖАТЬ SYNTAX ERROR !!!
-// Вместо этого все функции теперь просто экспортируются, и привязка 
-// будет выполнена ОДИН РАЗ в game.js через Object.assign(window, MissionLogic)
+// Привязка экспортируемых функций к window для вызова из HTML атрибутов
+window.renderSequentialQuestion = renderSequentialQuestion;
+window.handleSequentialAnswer = handleSequentialAnswer;
+window.renderBulkQuiz = renderBulkQuiz;
+window.handleBulkSubmit = handleBulkSubmit;
+window.finalizeQuizResult = finalizeQuizResult;
+window.handleSecretWordSubmit = handleSecretWordSubmit;
+window.sendGameChallenge = sendGameChallenge;
+window.handleTicTacToeResult = handleTicTacToeResult;

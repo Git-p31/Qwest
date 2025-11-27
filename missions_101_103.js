@@ -15,11 +15,34 @@ const QUIZ_TITLES = {
 // ===== I. QUIZ LOGIC FUNCTIONS (Task 1 & 4) =====
 // -------------------------------------------------------
 
+// Хелпер для определения награды
+const getRewardInfo = (taskId, teamId) => {
+    let index = taskId;
+    if (taskId >= 10) { // Для 102/104 миссии начинаются с ID 10
+        index = taskId - 9;
+    }
+    // Используем индекс 0-4 для доступа к массиву MISSION_REWARDS
+    const rewardId = Core.MISSION_REWARDS[teamId]?.[index - 1]; 
+    const rewardName = Core.state.globalItems[rewardId]?.name || 'НЕИЗВЕСТНАЯ НАГРАДА'; 
+    return { rewardId, rewardName };
+};
+
+
 export const openQuizModal = async (taskId) => {
     const modal = document.getElementById('quizModal');
     const quizContent = document.getElementById('quizQuestionsContainer');
     const titleEl = document.getElementById('quizModalTitle');
     const teamId = Core.state.me.team_id;
+
+    // НОВОЕ: Проверка статуса миссии перед загрузкой вопросов
+    const currentTask = Core.state.currentTeam?.tasks?.find(t => t.id === taskId);
+    if (currentTask && currentTask.completed) {
+        modal.classList.remove('hidden');
+        titleEl.textContent = QUIZ_TITLES[taskId] || `ЗАДАНИЕ ${taskId} (КВИЗ)`;
+        quizContent.innerHTML = '<p class="muted" style="text-align: center;">✅ Это задание уже выполнено вашей командой!</p>';
+        document.getElementById('quizSubmitBtn')?.classList.add('hidden');
+        return;
+    }
 
     quizContent.innerHTML = '<div style="text-align: center; padding: 20px;">Загрузка вопросов...</div>';
     document.getElementById('quizFinalMessage').innerHTML = '';
@@ -73,7 +96,7 @@ export const renderSequentialQuestion = () => {
     let optionsArray = [];
     
     let optionsString = currentItem.options;
-    // ... (Парсинг optionsString, как в старом main.js) ...
+    // ... (Парсинг опций остается без изменений) ...
     const match = String(optionsString).trim().match(/^\((\d+)\)\s*(.*)/);
     if (match) { optionsString = match[2]; }
     
@@ -227,16 +250,19 @@ export const finalizeQuizResult = async (taskId, totalQuestions, correctCount, s
     document.getElementById('quizSubmitBtn')?.classList.add('hidden'); 
     
     if (passed) {
+        // --- ЛОГИКА ВЫДАЧИ НАГРАДЫ (ФИКС Bug 2) ---
+        const { rewardId, rewardName } = getRewardInfo(taskId, Core.state.me.team_id);
+
         resultMsg.innerHTML = `<span style="color: var(--accent-green);">🎉 УСПЕХ! ${correctCount} из ${totalQuestions} верных. Задание №${taskId} выполнено!</span>`;
         
         const task = Core.state.currentTeam.tasks.find(t => t.id === taskId);
         if (task && !task.completed) {
             let newInventory = { ...Core.state.currentTeam.inventory };
             
-            if (task.reward_item_id) { 
-                const rewardId = task.reward_item_id;
+            if (rewardId) { 
                 newInventory[rewardId] = (newInventory[rewardId] || 0) + 1;
-                alert(`🎉 Получена награда: ${Core.state.globalItems[rewardId]?.name}!`);
+                // ФИКС Bug 1: Используем корректно полученное имя
+                alert(`🎉 Получена награда: ${rewardName}!`); 
             }
             
             const newTasks = Core.state.currentTeam.tasks.map(t => t.id === taskId ? {...t, completed: true} : t);
@@ -250,12 +276,14 @@ export const finalizeQuizResult = async (taskId, totalQuestions, correctCount, s
     } else {
         resultMsg.innerHTML = `<span style="color: var(--accent-red);">❌ ПРОВАЛ! Требуется ${successThreshold}.</span><br>Ваша команда будет ЗАМОРОЖЕНА на 2 минуты!`;
         
-        const freezeDurationMs = 2 * 60 * 1000; 
+        const freezeDurationMs = 2 * 60 * 1000;
+        
+        // ЛОГИКА ЗАМОРОЗКИ (Используем Core.updateTeamFreezeStatus)
         await Core.updateTeamFreezeStatus(Core.state.me.team_id, freezeDurationMs);
+        window.handleQuizFailure(Core.state.me.team_id);
     }
     
     await Core.refreshTeamData(); 
-    // Предполагаем, что renderGameInterface вызывается из game.js (window.renderGameInterface)
     window.renderGameInterface(); 
     
     container.innerHTML = `<div style="text-align: center; margin-top: 20px;">
@@ -347,12 +375,14 @@ export const handleSecretWordSubmit = async (taskId) => {
         
         const task = Core.state.currentTeam.tasks.find(t => t.id === taskId);
         if (task && !task.completed) {
+            // --- ЛОГИКА ВЫДАЧИ НАГРАДЫ (ФИКС Bug 2) ---
+            const { rewardId, rewardName } = getRewardInfo(taskId, Core.state.me.team_id);
+            
             let newInventory = { ...Core.state.currentTeam.inventory };
             
-            if (task.reward_item_id) { 
-                const rewardId = task.reward_item_id;
+            if (rewardId) { 
                 newInventory[rewardId] = (newInventory[rewardId] || 0) + 1;
-                alert(`🎉 Получена награда: ${Core.state.globalItems[rewardId]?.name}!`);
+                alert(`🎉 Получена награда: ${rewardName}!`);
             }
             
             const newTasks = Core.state.currentTeam.tasks.map(t => t.id === taskId ? {...t, completed: true} : t);
@@ -435,12 +465,14 @@ export const handleTicTacToeResult = async (attackerWon) => {
         
         const task = Core.state.currentTeam.tasks.find(t => t.id === taskId);
         if (task && !task.completed) {
+            // --- ЛОГИКА ВЫДАЧИ НАГРАДЫ (ФИКС Bug 2) ---
+            const { rewardId, rewardName } = getRewardInfo(taskId, Core.state.me.team_id);
+            
             let newInventory = { ...Core.state.currentTeam.inventory };
             
-            if (task.reward_item_id) { 
-                const rewardId = task.reward_item_id;
+            if (rewardId) { 
                 newInventory[rewardId] = (newInventory[rewardId] || 0) + 1;
-                alert(`🎉 Получена награда: ${Core.state.globalItems[rewardId]?.name}!`);
+                alert(`🎉 Получена награда: ${rewardName}!`);
             }
             
             const newTasks = Core.state.currentTeam.tasks.map(t => t.id === taskId ? {...t, completed: true} : t);
@@ -452,9 +484,12 @@ export const handleTicTacToeResult = async (attackerWon) => {
         }
     } else {
         const freezeDurationMs = 2 * 60 * 1000;
+        
         resultMessage = `❌ ПОРАЖЕНИЕ! Ваша команда ЗАМОРОЖЕНА на 2 минуты. Повторная попытка будет доступна после разморозки.`;
         
+        // ЛОГИКА ЗАМОРОЗКИ
         await Core.updateTeamFreezeStatus(Core.state.me.team_id, freezeDurationMs);
+        window.handleQuizFailure(Core.state.me.team_id);
     }
     
     await Core.refreshTeamData(); 

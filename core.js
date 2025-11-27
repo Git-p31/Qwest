@@ -48,6 +48,15 @@ export const SECRET_WORDS = {
     14: "JINGLEBELLS" // Task 14 (Logic ID 5) - Sing a song
 };
 
+// НОВОЕ: МАТРИЦА ВЫПАДАЮЩИХ ПРЕДМЕТОВ (Используется в миссиях для определения награды)
+export const MISSION_REWARDS = {
+    // Индекс 0 = Миссия 1/10, Индекс 4 = Миссия 5/14
+    101: [1, 3, 7, 8, 10], // Team 101 (A)
+    102: [2, 4, 5, 7, 9],  // Team 102 (B)
+    103: [1, 3, 5, 8, 10], // Team 103 (C)
+    104: [2, 4, 6, 7, 9],  // Team 104 (D)
+};
+
 // ===== СТРУКТУРА МАРШРУТОВ (ССЫЛАЕТСЯ НА NAME в map_points) - Обновлено с вашими данными =====
 export const MISSION_PATH_STRUCTURE = {
     '101_103': [ 
@@ -137,30 +146,35 @@ export async function fetchStaticMapPoints() {
 }
 
 export async function fetchQuizData(taskId, teamId) {
-    // 1. Определение имени таблицы на основе ID команды (новая логика)
+    // 1. Определение имени таблицы и базового ID группы
     let tableName = '';
+    let groupBaseId = null;
+
     if (teamId === 101 || teamId === 103) {
         tableName = 'quiz_data_101_103';
+        groupBaseId = 101;
     } else if (teamId === 102 || teamId === 104) {
         tableName = 'quiz_data_102_104';
+        groupBaseId = 102;
     } else {
         console.error("Unknown team ID for quiz data fetch:", teamId);
         return [];
     }
     
-    // 2. Используем taskId напрямую, без нормализации
+    // 2. Используем taskId напрямую
     let query = supabase.from(tableName)
         .select('*')
         .eq('task_id', taskId); 
         
     // 3. Адаптация логики team_id (если нужна) под новые ID
-    if (taskId === 1 || taskId === 10) { // Task 1 (ID 1) и Task 10 (ID 10)
-        query = query.or(`team_id.eq.${teamId},team_id.is.null`);
-    } else if (taskId === 4 || taskId === 13) { // Task 4 (ID 4) и Task 13 (ID 13)
+    if (taskId === 1 || taskId === 10) { 
+        // ФИКС: Ищем по текущему ID, базовому ID группы, или generic (null)
+        query = query.or(`team_id.eq.${teamId},team_id.eq.${groupBaseId},team_id.is.null`);
+    } else if (taskId === 4 || taskId === 13) { 
+        // Task 4 and 13 are fully generic (only null allowed)
         query = query.is('team_id', null);
     } 
-    // УДАЛЕНА СТАРАЯ ЛОГИКА НОРМАЛИЗАЦИИ: const dbTaskId = taskId > 6 ? taskId - 9 : taskId; 
-
+    
     const { data, error } = await query;
 
     if (error) {
@@ -188,6 +202,19 @@ export async function updateTaskAndInventory(teamId, newTasks, newInventory) {
     if (error) {
         console.error('DB Task Update Error:', error);
         return { success: false, error: error.message };
+    }
+    return { success: true };
+}
+
+// НОВАЯ ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ОБНОВЛЕНИЯ ПРОИЗВОЛЬНЫХ ПОЛЕЙ КОМАНДЫ
+export async function updateTeam(updateObject, teamId = state.me.team_id) {
+    const { error } = await supabase.from('teams')
+        .update(updateObject)
+        .eq('id', teamId);
+        
+    if (error) {
+        console.error('Team Update Error:', error);
+        return { success: false, message: error.message };
     }
     return { success: true };
 }
@@ -439,7 +466,6 @@ export async function respondToTrade(tradeId, accept = true) {
         
     if (updateError) {
         console.error('Final trade status update error:', updateError);
-        // Тут можно попытаться откатить инвентарь, но в целях простоты оставляем только сообщение
         return { success: false, msg: 'Ошибка при финальном обновлении статуса обмена' };
     }
 
