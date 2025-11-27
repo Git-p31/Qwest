@@ -74,7 +74,7 @@ function assignMissionFunctionsToWindow() {
     // Перечисляем все функции, которые мы ожидаем вызывать из HTML/других частей game.js
     const functionsToAssign = [
         'routeTaskToModal', 'openQuizModal', 'renderSequentialQuestion', 
-        'handleSequentialAnswer', 'renderBulkQuiz', 'handleBulkSubmit', 
+        'renderBulkQuiz', 'handleBulkSubmit', 
         'finalizeQuizResult', 'openSecretWordModal', 'handleSecretWordSubmit', 
         'openTicTacToeModal', 'sendGameChallenge', 'handleTicTacToeResult'
     ];
@@ -249,8 +249,6 @@ function renderTasks() {
 
         let taskText = task.text;
         
-
-
         const tr = document.createElement('tr');
         tr.className = task.completed ? 'task-row completed' : 'task-row';
         
@@ -326,6 +324,7 @@ function initMapLogic() {
     }, 3000);
 }
 
+// ===== ИСПРАВЛЕННАЯ ФУНКЦИЯ findActiveMission =====
 function findActiveMission(tasks) {
     if (!tasks || tasks.length === 0) return null;
     
@@ -353,17 +352,18 @@ function findActiveMission(tasks) {
         }
 
         if (!requirementsMet) {
-            // The team HAS NOT collected all required items. Lock the mission.
+            // Команда НЕ собрала все предметы. Блокируем миссию.
             const stallName = (teamId === 101 || teamId === 103) ? 'Палатка №409 (ФИНАЛ)' : 'Палатка №325 (ФИНАЛ)';
             
             return {
                 id: 'mission_locked', 
-                type: 'npc', // Use generic NPC type to prevent interaction, or new custom type
+                type: 'final_lock', // ТИП МАРКЕРА: ФИНАЛЬНЫЙ ЗАМОК
                 x: staticMapPoints.find(p => p.title === stallName)?.x || 50,
                 y: staticMapPoints.find(p => p.title === stallName)?.y || 50,
                 title: '🔒 ФИНАЛ ЗАБЛОКИРОВАН', 
                 desc: 'Необходимо собрать все финальные предметы. Проверьте ваш рюкзак и Миссии.',
-                icon: '🔒'
+                icon: '🔒',
+                requiredItems: requiredItems // ПЕРЕДАЕМ ТРЕБОВАНИЯ
             };
         }
     }
@@ -443,7 +443,14 @@ function updateMarker(id, type, x, y, label, data, customSymbol) {
         const m = L.marker(loc, {icon: icon}).addTo(map);
         m.on('click', (e) => { 
             L.DomEvent.stopPropagation(e); 
-            if (type === 'mission_stall') { showMissionPopup(data); } else { showPopup(data, type, id); }
+            // ОБРАБОТЧИК КЛИКОВ (Обновлен)
+            if (type === 'final_lock') {
+                window.openFinalLockModal(data.requiredItems);
+            } else if (type === 'mission_stall') { 
+                showMissionPopup(data); 
+            } else { 
+                showPopup(data, type, id); 
+            }
             setTimeout(() => { map.flyTo(loc, map.getZoom()); }, 50); 
         });
         mapMarkers[id] = m;
@@ -1239,6 +1246,66 @@ window.openCraftModal = openCraftModal;
 window.doCraft = doCraft;
 window.leaveTent = window.leaveTent;
 window.enterTent = window.enterTent;
+
+
+// =======================================================
+// ===== NEW MODAL FUNCTIONS (Must be at the end) =====
+// =======================================================
+
+// Функция открытия красивого окна блокировки
+window.openFinalLockModal = (requirements) => {
+    const modal = document.getElementById('finalLockModal');
+    const grid = document.getElementById('finalItemsGrid');
+    const btn = document.getElementById('btnActivateFinal');
+    const status = document.getElementById('finalLockStatus');
+    
+    // Очищаем сетку
+    grid.innerHTML = '';
+    
+    const inventory = Core.state.currentTeam.inventory || {};
+    let allCollected = true;
+
+    // Проходимся по списку требуемых предметов
+    for (const [itemId, countNeeded] of Object.entries(requirements)) {
+        // Получаем данные о предмете (иконку/название)
+        const itemData = Core.state.globalItems[itemId];
+        const hasCount = inventory[itemId] || 0;
+        const isCollected = hasCount >= countNeeded;
+
+        if (!isCollected) allCollected = false;
+
+        // Создаем div для слота
+        const slot = document.createElement('div');
+        slot.className = `lock-item-slot ${isCollected ? 'collected' : 'missing'}`;
+        
+        // Вставляем контент (картинку или эмодзи)
+        if (itemData && itemData.emoji && itemData.emoji.startsWith('http')) {
+            slot.innerHTML = `<img src="${itemData.emoji}" alt="${itemData.name}">`;
+        } else {
+            slot.innerHTML = `<span>${itemData ? itemData.emoji : '❓'}</span>`;
+        }
+        
+        grid.appendChild(slot);
+    }
+
+    // Настройка кнопки Активировать
+    if (allCollected) {
+        btn.disabled = false;
+        status.innerHTML = '<span style="color:#50fa7b">ГОТОВО К АКТИВАЦИИ!</span>';
+    } else {
+        btn.disabled = true;
+        status.textContent = 'Найдите недостающие предметы, чтобы зажечь огни!';
+    }
+
+    modal.classList.remove('hidden');
+};
+
+// Простая заглушка для кнопки Активировать
+window.tryActivateFinal = () => {
+    document.getElementById('finalLockModal').classList.add('hidden');
+    renderMarkers(); // Обновляем карту
+    alert("Проверка завершена. Если все условия выполнены, задание откроется!");
+};
 
 // Start Game
 initGame().catch(console.error);

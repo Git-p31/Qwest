@@ -322,6 +322,12 @@ h2 { color: var(--accent-gold); margin: 5px 0 15px 0; font-size: 1.1rem; text-tr
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(217, 0, 38, 0.4);
 }
+.start-button:disabled {
+    background: #555;
+    cursor: not-allowed;
+    opacity: 0.7;
+    box-shadow: none;
+}
 
 /* === КНОПКА "ПРЕДЛОЖИТЬ ОБМЕН" В ПАЛАТКЕ === */
 .propose-trade-btn {
@@ -496,4 +502,86 @@ body.frozen-mode #btnGuardianWarm { pointer-events: auto !important; opacity: 1 
     0%, 100% { transform: translateX(0); }
     20%, 60% { transform: translateX(-5px); }
     40%, 80% { transform: translateX(5px); }
+}
+
+/* ======================================================= */
+/* === FINAL LOCK MODAL STYLES (NEW) === */
+/* ======================================================= */
+
+.final-lock-content {
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); /* Темно-синий космос */
+    border: 2px solid #ffd700;
+    text-align: center;
+    padding: 30px;
+    max-width: 400px;
+    border-radius: 20px;
+    box-shadow: 0 0 30px rgba(0,0,0,0.8);
+}
+
+.final-title {
+    color: #fff;
+    font-size: 1.8rem;
+    margin-bottom: 20px;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    font-weight: 900;
+}
+
+/* Контейнер для предметов (в ряд) */
+.items-grid-container {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin: 20px 0;
+}
+
+/* Ячейка предмета */
+.lock-item-slot {
+    width: 60px;
+    height: 60px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid transparent;
+    transition: all 0.3s ease;
+}
+
+/* Картинка внутри слота */
+.lock-item-slot img {
+    width: 45px;
+    height: 45px;
+    object-fit: contain;
+}
+
+/* Эмодзи внутри слота (если нет картинки) */
+.lock-item-slot span {
+    font-size: 2rem;
+}
+
+/* --- СОСТОЯНИЯ --- */
+
+/* 1. Предмет НЕ собран (тусклый и серый) */
+.lock-item-slot.missing {
+    opacity: 0.3;
+    filter: grayscale(100%);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 2. Предмет СОБРАН (светится) */
+.lock-item-slot.collected {
+    opacity: 1;
+    filter: grayscale(0%);
+    background: rgba(255, 215, 0, 0.2); /* Золотистая подложка */
+    border-color: #ffd700; /* Золотая рамка */
+    box-shadow: 0 0 15px #ffd700, inset 0 0 10px #ffd700; /* Двойное свечение */
+    transform: scale(1.1); 
+}
+
+.status-text {
+    color: #a0a0a0;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+    font-style: italic;
 }
