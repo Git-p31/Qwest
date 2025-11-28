@@ -12,12 +12,24 @@
     <div id="story-overlay"></div>
     
     <div id="story-wrap">
-        <div id="story-text-container">
+        <div id="story-image-container">
+            <img id="story-image" src="" alt="Story illustration" class="hidden">
+            <div class="image-placeholder">
+                <span style="font-size: 3rem;">❄️</span>
             </div>
+            <div class="shine-effect"></div>
+        </div>
+
+        <div id="story-text-container"></div>
         
         <div id="story-controls">
-            <button id="skip-button" class="story-button">Нажмите, чтобы начать...</button>
-            <button id="start-button" class="story-button hidden">НАЧАТЬ ПРИКЛЮЧЕНИЕ</button>
+            <button id="skip-button" class="story-button secondary">
+                <span class="btn-text">Пропустить вступление</span>
+            </button>
+            <button id="start-button" class="story-button primary hidden">
+                <span class="btn-text">НАЧАТЬ ПРИКЛЮЧЕНИЕ</span>
+                <span class="btn-glow"></span>
+            </button>
         </div>
     </div>
     
