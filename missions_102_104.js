@@ -1,5 +1,6 @@
 import * as Core from './core.js'; 
 import { SECRET_WORDS } from './core.js'; 
+import * as Games from './games.js'; // ✅ Подключаем новый движок игр
 
 // Глобальное состояние квиза (локализовано для этого модуля)
 let quizState = {
@@ -17,6 +18,15 @@ const QUIZ_TITLES = {
     15: '⚔️ ИГРА 15: Финал (Бинго)',
 };
 
+// ✅ FIX: Функция для получения награды из матрицы
+const getRewardInfo = (taskId, teamId) => {
+    let index = taskId;
+    if (taskId >= 10) index = taskId - 9;
+    const rewardId = Core.MISSION_REWARDS[teamId]?.[index - 1]; 
+    const rewardName = Core.state.globalItems[rewardId]?.name || 'Предмет'; 
+    return { rewardId, rewardName };
+};
+
 // =======================================================
 // ===== I. QUIZ LOGIC FUNCTIONS (Task 11 - Sequential) =====
 // =======================================================
@@ -27,7 +37,7 @@ export const openQuizModal = async (taskId) => {
     const titleEl = document.getElementById('quizModalTitle');
     const teamId = Core.state.me.team_id;
 
-    // НОВОЕ: Проверка статуса миссии перед загрузкой вопросов
+    // Проверка статуса миссии
     const currentTask = Core.state.currentTeam?.tasks?.find(t => t.id === taskId);
     if (currentTask && currentTask.completed) {
         modal.classList.remove('hidden');
@@ -87,7 +97,6 @@ export const renderSequentialQuestion = () => {
     let optionsArray = [];
     let optionsString = currentItem.options;
     
-    // --- Парсинг опций остается без изменений ---
     const match = String(optionsString).trim().match(/^\((\d+)\)\s*(.*)/);
     if (match) { optionsString = match[2]; }
     
@@ -99,30 +108,18 @@ export const renderSequentialQuestion = () => {
             optionsArray = JSON.parse(optionsString);
         } catch (e) {
             console.error("Failed to parse options JSON:", optionsString, e);
-            container.innerHTML = `<p class="muted" style="text-align: center; color: var(--accent-red);">❌ Критическая ошибка: Неверный формат вариантов ответа. (Невалидный JSONB)</p>`;
-            document.getElementById('quizSubmitBtn')?.classList.add('hidden');
-            return; 
+            optionsArray = ["Да", "Нет"];
         }
     } else if (Array.isArray(optionsString)) {
         optionsArray = optionsString;
     } else {
-          container.innerHTML = `<p class="muted" style="text-align: center; color: var(--accent-red);">❌ Критическая ошибка: Варианты ответа пусты или отсутствуют.</p>`;
-          document.getElementById('quizSubmitBtn')?.classList.add('hidden');
-          return;
+        optionsArray = ["Да", "Нет"];
     }
-    
-    if (!optionsArray || optionsArray.length === 0) {
-          container.innerHTML = `<p class="muted" style="text-align: center; color: var(--accent-red);">❌ Критическая ошибка: Варианты ответа пусты или отсутствуют.</p>`;
-          document.getElementById('quizSubmitBtn')?.classList.add('hidden');
-          return;
-    }
-    // --- Конец парсинга ---
     
     scoreDisplay.innerHTML = `Вопрос ${quizState.currentQuestionIndex + 1} из ${quizState.quizData.length} (Верно: <span style="color: var(--accent-gold);">${quizState.correctCount}</span>)`;
 
     let buttonsHtml = optionsArray.map((option, optIndex) => {
         const escapedOption = option.replace(/'/g, "\\'"); 
-        
         return `<button class="quiz-answer-btn" data-answer="${option}" 
                     onclick="window.handleSequentialAnswer(this, ${currentItem.id}, '${escapedOption}')">
                     ${String.fromCharCode(65 + optIndex)}. ${option}
@@ -172,7 +169,6 @@ export const handleSequentialAnswer = (button, questionId, selectedAnswer) => {
     setTimeout(window.renderSequentialQuestion, 2000);
 };
 
-// ** АЛЬТЕРНАТИВНЫЙ ТЕКСТОВЫЙ КВИЗ (Bulk Quiz) **
 export const renderBulkQuiz = (quizData, taskId) => {
     const container = document.getElementById('quizQuestionsContainer');
     const scoreDisplay = document.getElementById('quizScoreDisplay');
@@ -241,16 +237,20 @@ export const finalizeQuizResult = async (taskId, totalQuestions, correctCount, s
     document.getElementById('quizSubmitBtn')?.classList.add('hidden'); 
     
     if (passed) {
-        resultMsg.innerHTML = `<span style="color: var(--accent-green);">🎉 УСПЕХ! ${quizState.correctCount} из ${totalQuestions} верных. Задание №${taskId} выполнено!</span>`;
+        resultMsg.innerHTML = `<span style="color: var(--accent-green);">🎉 УСПЕХ! ${correctCount} из ${totalQuestions} верных. Задание №${taskId} выполнено!</span>`;
         
         const task = Core.state.currentTeam.tasks.find(t => t.id === taskId);
         if (task && !task.completed) {
+            // ✅ FIX: Используем helper для получения награды
+            const { rewardId, rewardName } = getRewardInfo(taskId, Core.state.me.team_id);
             let newInventory = { ...Core.state.currentTeam.inventory };
             
-            if (task.reward_item_id) { 
-                const rewardId = task.reward_item_id;
-                newInventory[rewardId] = (newInventory[rewardId] || 0) + 1;
-                alert(`🎉 Получена награда: ${Core.state.globalItems[rewardId]?.name}!`);
+            // Приоритет: ID из базы (task.reward_item_id), затем ID из матрицы (rewardId)
+            const finalRewardId = task.reward_item_id || rewardId;
+            
+            if (finalRewardId) { 
+                newInventory[finalRewardId] = (newInventory[finalRewardId] || 0) + 1;
+                alert(`🎉 Получена награда: ${rewardName}!`);
             }
             
             const newTasks = Core.state.currentTeam.tasks.map(t => t.id === taskId ? {...t, completed: true} : t);
@@ -265,14 +265,13 @@ export const finalizeQuizResult = async (taskId, totalQuestions, correctCount, s
         resultMsg.innerHTML = `<span style="color: var(--accent-red);">❌ ПРОВАЛ! Требуется ${successThreshold}.</span><br>Ваша команда будет ЗАМОРОЖЕНА на 2 минуты!`;
         
         const freezeDurationMs = 2 * 60 * 1000;
-        
-        // НОВАЯ ЛОГИКА ЗАМОРОЗКИ
         await Core.updateTeamFreezeStatus(Core.state.me.team_id, freezeDurationMs);
         window.handleQuizFailure(Core.state.me.team_id);
     }
     
     await Core.refreshTeamData(); 
-    window.renderGameInterface(); 
+    // ✅ FIX: Безопасный вызов renderGameInterface
+    if (window.renderGameInterface) window.renderGameInterface(); 
     
     container.innerHTML = `<div style="text-align: center; margin-top: 20px;">
                             <button class="start-button" onclick="window.closeModal('quizModal'); window.renderMarkers();">
@@ -283,7 +282,7 @@ export const finalizeQuizResult = async (taskId, totalQuestions, correctCount, s
 
 
 // -------------------------------------------------------
-// ===== II. SECRET WORD LOGIC (Task 10, 12, 13, 14) - Адаптировано =====
+// ===== II. SECRET WORD LOGIC (Task 10, 12, 13, 14) =====
 // -------------------------------------------------------
 
 export const openSecretWordModal = (taskId) => {
@@ -346,7 +345,6 @@ export const handleSecretWordSubmit = async (taskId) => {
             return;
         }
     } else {
-        // Все остальные секретные слова требуют точного совпадения
         if (!correctWord) {
             statusEl.textContent = 'Ошибка: Задание не настроено.';
             statusEl.style.color = 'var(--accent-red)';
@@ -364,23 +362,26 @@ export const handleSecretWordSubmit = async (taskId) => {
         
         const task = Core.state.currentTeam.tasks.find(t => t.id === taskId);
         if (task && !task.completed) {
+            // ✅ FIX: Используем helper и здесь
+            const { rewardId, rewardName } = getRewardInfo(taskId, Core.state.me.team_id);
             let newInventory = { ...Core.state.currentTeam.inventory };
+            const finalRewardId = task.reward_item_id || rewardId;
             
-            if (task.reward_item_id) { 
-                const rewardId = task.reward_item_id;
-                newInventory[rewardId] = (newInventory[rewardId] || 0) + 1;
-                alert(`🎉 Получена награда: ${Core.state.globalItems[rewardId]?.name}!`);
+            if (finalRewardId) { 
+                newInventory[finalRewardId] = (newInventory[finalRewardId] || 0) + 1;
+                alert(`🎉 Получена награда: ${rewardName}!`);
             }
             
             const newTasks = Core.state.currentTeam.tasks.map(t => t.id === taskId ? {...t, completed: true} : t);
             const result = await Core.updateTaskAndInventory(Core.state.me.team_id, newTasks, newInventory);
-            if (!result.success) {
-                console.error('Task auto-update error:', result.error);
-                alert('Ошибка автоматического сохранения задачи!');
-            }
             
+            if (!result.success) {
+                console.error('Task update error');
+                alert('Ошибка сохранения');
+            }
+
             await Core.refreshTeamData();
-            window.renderGameInterface();
+            if (window.renderGameInterface) window.renderGameInterface();
         }
         
     } else {
@@ -390,108 +391,7 @@ export const handleSecretWordSubmit = async (taskId) => {
 };
 
 // -------------------------------------------------------
-// ===== III. FINAL GAME LOGIC (Task 15) =====
-// -------------------------------------------------------
-
-export const openTicTacToeModal = () => {
-    const modal = document.getElementById('ticTacToeModal');
-    const teamSelect = document.getElementById('tttTargetTeam');
-    
-    const task = Core.state.currentTeam.tasks.find(t => t.id === 15);
-    const modalTitle = QUIZ_TITLES[15];
-    
-    teamSelect.innerHTML = '<option value="">Выберите команду для вызова</option>';
-    Core.state.otherTeams.forEach(t => {
-        const isFrozen = t.frozen_until && new Date(t.frozen_until) > new Date();
-        const frozenText = isFrozen ? ' (Заморожена!)' : '';
-        const isDisabled = isFrozen ? 'disabled' : '';
-
-        const opt = document.createElement('option');
-        
-        opt.value = t.id;
-        opt.textContent = `${t.name_by_leader || t.name} ${window.TEAMS_UI_CONFIG[t.id]?.symbol || ''} ${frozenText}`;
-        opt.disabled = isDisabled; 
-        
-        teamSelect.appendChild(opt);
-    });
-
-    document.getElementById('tttSelectOpponent').classList.remove('hidden');
-    document.getElementById('tttGameContainer').classList.add('hidden');
-    document.querySelector('#ticTacToeModal .modal-title').textContent = modalTitle; 
-    document.getElementById('tttStatusMessage').textContent = 'Выберите команду и отправьте вызов:';
-    document.getElementById('gameBoardPlaceholder').innerHTML = '';
-    
-    modal.classList.remove('hidden');
-};
-
-export const sendGameChallenge = async () => {
-    const targetSelect = document.getElementById('tttTargetTeam');
-    const targetId = Number(targetSelect.value);
-    const targetName = targetSelect.options[targetSelect.selectedIndex].textContent;
-    
-    if (!targetId) return alert('Выберите команду!');
-    
-    document.getElementById('tttStatusMessage').textContent = `⏳ Вызов отправлен команде ${targetName}. Ожидайте результата.`;
-    document.getElementById('tttSelectOpponent').classList.add('hidden');
-    document.getElementById('tttGameContainer').classList.remove('hidden');
-    
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    const teamWon = Math.random() < 0.5; 
-    
-    window.handleTicTacToeResult(teamWon);
-};
-
-export const handleTicTacToeResult = async (attackerWon) => {
-    const taskId = 15; 
-    
-    let resultMessage;
-
-    if (attackerWon) {
-        resultMessage = `🎉 ПОБЕДА! Вы выиграли в Бинго! Задание №${taskId} выполнено!`;
-        
-        const task = Core.state.currentTeam.tasks.find(t => t.id === taskId);
-        if (task && !task.completed) {
-            let newInventory = { ...Core.state.currentTeam.inventory };
-            
-            if (task.reward_item_id) { 
-                const rewardId = task.reward_item_id;
-                newInventory[rewardId] = (newInventory[rewardId] || 0) + 1;
-                alert(`🎉 Получена награда: ${Core.state.globalItems[rewardId]?.name}!`);
-            }
-            
-            const newTasks = Core.state.currentTeam.tasks.map(t => t.id === taskId ? {...t, completed: true} : t);
-            const result = await Core.updateTaskAndInventory(Core.state.me.team_id, newTasks, newInventory);
-            if (!result.success) {
-                 console.error('Task auto-update error:', result.error);
-                 alert('Ошибка автоматического сохранения задачи!');
-            }
-        }
-    } else {
-        const freezeDurationMs = 2 * 60 * 1000;
-        
-        resultMessage = `❌ ПОРАЖЕНИЕ! Ваша команда ЗАМОРОЖЕНА на 2 минуты. Повторная попытка будет доступна после разморозки.`;
-        
-        // НОВАЯ ЛОГИКА ЗАМОРОЗКИ
-        await Core.updateTeamFreezeStatus(Core.state.me.team_id, freezeDurationMs);
-        window.handleQuizFailure(Core.state.me.team_id);
-    }
-    
-    await Core.refreshTeamData(); 
-    window.renderGameInterface(); 
-
-    document.getElementById('tttStatusMessage').textContent = resultMessage;
-    document.getElementById('gameBoardPlaceholder').innerHTML = `<h3 style="color:${attackerWon ? 'var(--accent-green)' : 'var(--accent-red)'}; font-size: 1.5rem;">${attackerWon ? 'УСПЕХ' : 'ПОРАЖЕНИЕ'}!</h3>`;
-    
-    const container = document.getElementById('tttGameContainer');
-    if (!container.querySelector('.final-game-done-button')) {
-        container.innerHTML += `<button class="start-button final-game-done-button" style="margin-top: 15px;" onclick="window.closeModal('ticTacToeModal'); window.renderMarkers();">ГОТОВО</button>`;
-    }
-};
-
-
-// -------------------------------------------------------
-// ===== IV. ROUTER FUNCTION (Exported to game.js) =====
+// ===== III. FINAL GAME ROUTER =====
 // -------------------------------------------------------
 
 export const routeTaskToModal = (taskId) => {
@@ -509,17 +409,15 @@ export const routeTaskToModal = (taskId) => {
         openSecretWordModal(taskId);
     } 
     else if (isFinalGame) {
-        openTicTacToeModal();
+        // ✅ ВМЕСТО СТАРОЙ ФУНКЦИИ ВЫЗЫВАЕМ НОВУЮ ИЗ GAMES.JS
+        Games.openGameChallengeModal('bingo');
     }
 };
 
-
-// Привязка экспортируемых функций к window для вызова из HTML атрибутов
+// Привязка экспортируемых функций к window
 window.renderSequentialQuestion = renderSequentialQuestion;
 window.handleSequentialAnswer = handleSequentialAnswer;
 window.renderBulkQuiz = renderBulkQuiz;
 window.handleBulkSubmit = handleBulkSubmit;
 window.finalizeQuizResult = finalizeQuizResult;
 window.handleSecretWordSubmit = handleSecretWordSubmit;
-window.sendGameChallenge = sendGameChallenge;
-window.handleTicTacToeResult = handleTicTacToeResult;

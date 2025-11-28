@@ -123,7 +123,7 @@
             <h2 class="final-title">Праздничные Игрушки</h2>
             
             <div id="finalItemsGrid" class="items-grid-container">
-                </div>
+            </div>
 
             <p id="finalLockStatus" class="status-text">Соберите все предметы для активации!</p>
 
@@ -257,28 +257,28 @@
         </div>
     </div>
 
-    <div id="ticTacToeModal" class="modal-backdrop hidden">
+    <div id="gameChallengeModal" class="modal-backdrop hidden" style="z-index: 10005;">
         <div class="modal-content">
-            <div class="modal-header-strip" style="background: repeating-linear-gradient(45deg, #FF5555, #FF5555 10px, #8B0000 10px, #8B0000 20px);"></div>
+            <div class="modal-header-strip" style="background: linear-gradient(90deg, #ff00cc, #333399);"></div>
             <div class="modal-top-row">
-                <h3 class="modal-title" style="color: var(--accent-red);">⚔️ КРЕСТИКИ-НОЛИКИ (ФИНАЛ)</h3>
-                <button class="modal-close" onclick="window.closeModal('ticTacToeModal')">×</button>
+                <h3 class="modal-title" id="gameChallengeTitle">ИГРА</h3>
+                <button class="modal-close" onclick="window.closeModal('gameChallengeModal')">×</button>
             </div>
-            
-            <div id="tttSelectOpponent">
-                <p class="muted" style="margin-bottom: 15px;">Выберите команду, чтобы бросить ей вызов. **Они не смогут отказаться.**</p>
-                <select id="tttTargetTeam" class="modal-input" style="margin-bottom: 20px;"></select>
-                <button id="tttBtnChallenge" class="start-button" onclick="window.sendGameChallenge()">
-                    ОТПРАВИТЬ ВЫЗОВ
+
+            <div id="gameChallengeStep1">
+                <p class="muted" style="margin-bottom: 15px;">
+                    Бросьте вызов любой команде! <br>
+                    <span style="color: var(--accent-red);">Они не смогут отказаться.</span>
+                </p>
+                <select id="gameTargetTeam" class="modal-input" style="margin-bottom: 20px;"></select>
+                <button id="btnSendChallenge" class="start-button" onclick="window.startChallenge()">
+                    ⚔️ БРОСИТЬ ВЫЗОВ
                 </button>
             </div>
-            
-            <div id="tttGameContainer" class="hidden" style="text-align: center;">
-                <p id="tttStatusMessage" style="font-size: 1.1rem; color: var(--accent-gold); margin-bottom: 15px;">Ожидаем принятия вызова командой...</p>
-                <div id="gameBoardPlaceholder" style="width: 200px; height: 200px; margin: 15px auto; border: 2px solid #555; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center;">
-                    Игра в Крестики-нолики (UI Placeholder)
-                </div>
-                <p class="muted" style="margin-top: 10px;">В случае проигрыша, ваша команда будет заморожена на 2 минуты.</p>
+
+            <div id="gameBoardArea" class="hidden">
+                <p id="gameStatusText">Подготовка...</p>
+                <div id="gameBoardContainer"></div>
             </div>
         </div>
     </div>

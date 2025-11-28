@@ -32,6 +32,7 @@ export const CRAFT_RECIPES = [
 ];
 
 // ПУЛЫ ПРЕДМЕТОВ ДЛЯ КЛАДОИСКАТЕЛЯ
+// Квестовые предметы (6-10, 14+) исключены, они уникальны и не участвуют в крафте/луте
 export const GADGET_POOL = [11, 12, 13]; 
 export const RESOURCE_POOL = [1, 2, 3, 4, 5]; 
 
@@ -41,23 +42,23 @@ export const SECRET_WORDS = {
     2: "ГЛИНТВЕЙН", // Task 2 (101/103) - Cheapest item
     3: "ЗВЕЗДА", // Task 3 (101/103) - Star form
     5: "JINGLEBELLS", // Task 5 (101/103) - Sing a song
-    // НОВЫЕ СЕКРЕТНЫЕ СЛОВА ДЛЯ ГРУППЫ 102/104 (Tasks 10-15)
-    10: "ШАПКА", // Task 10 (Logic ID 1) - Новогодняя шапка (Assumed word)
-    12: "ЗВЕЗДА", // Task 12 (Logic ID 3) - Star form
-    13: "ФОНТАН", // Task 13 (Logic ID 4) - Год фонтана (Assumed word)
-    14: "JINGLEBELLS" // Task 14 (Logic ID 5) - Sing a song
+    
+    // НОВЫЕ СЕКРЕТНЫЕ СЛОВА ДЛЯ ГРУППЫ 102/104
+    10: "ШАПКА", // Task 10
+    12: "ЗВЕЗДА", // Task 12
+    13: "1723", // Task 13 (Год создания фонтана) - ИСПРАВЛЕНО
+    14: "JINGLEBELLS" // Task 14
 };
 
-// НОВОЕ: МАТРИЦА ВЫПАДАЮЩИХ ПРЕДМЕТОВ (Используется в миссиях для определения награды)
+// МАТРИЦА ВЫПАДАЮЩИХ ПРЕДМЕТОВ (Награды за миссии)
 export const MISSION_REWARDS = {
-    // Индекс 0 = Миссия 1/10, Индекс 4 = Миссия 5/14
     101: [1, 3, 7, 8, 10], // Team 101 (A)
     102: [2, 4, 5, 7, 9],  // Team 102 (B)
     103: [1, 3, 5, 8, 10], // Team 103 (C)
     104: [2, 4, 6, 7, 9],  // Team 104 (D)
 };
 
-// ===== СТРУКТУРА МАРШРУТОВ (ССЫЛАЕТСЯ НА NAME в map_points) - Обновлено с вашими данными =====
+// ===== СТРУКТУРА МАРШРУТОВ =====
 export const MISSION_PATH_STRUCTURE = {
     '101_103': [ 
         {taskId: 1, stallName: 'Палатка №154 (Миссия 1)'},
@@ -110,7 +111,7 @@ export async function refreshTeamData() {
 }
 
 export async function fetchAllTeamsData() {
-    const { data: teams } = await supabase.from('teams').select('id, name, frozen_until, current_tent_id, name_by_leader, selfie_url'); // Добавлено name_by_leader, selfie_url
+    const { data: teams } = await supabase.from('teams').select('id, name, frozen_until, current_tent_id, name_by_leader, selfie_url'); 
     const { data: players } = await supabase.from('players').select('team_id');
 
     if (teams && players && state.me) {
@@ -119,7 +120,6 @@ export async function fetchAllTeamsData() {
             return {
                 ...t,
                 playerCount: count,
-                // Генерация координат для симуляции движения
                 x: t.x || (20 + Math.random() * 60), 
                 y: t.y || (20 + Math.random() * 60),
                 type: 'team'
@@ -137,8 +137,8 @@ export async function fetchStaticMapPoints() {
     return data.map(p => ({
         id: p.id.toString(), 
         type: p.type,
-        x: p.lng, // lng -> X
-        y: p.lat, // lat -> Y
+        x: p.lng,
+        y: p.lat,
         title: p.name,
         desc: p.description,
         icon: p.icon 
@@ -146,7 +146,6 @@ export async function fetchStaticMapPoints() {
 }
 
 export async function fetchQuizData(taskId, teamId) {
-    // 1. Определение имени таблицы и базового ID группы
     let tableName = '';
     let groupBaseId = null;
 
@@ -161,17 +160,13 @@ export async function fetchQuizData(taskId, teamId) {
         return [];
     }
     
-    // 2. Используем taskId напрямую
     let query = supabase.from(tableName)
         .select('*')
         .eq('task_id', taskId); 
         
-    // 3. Адаптация логики team_id (если нужна) под новые ID
     if (taskId === 1 || taskId === 10) { 
-        // ФИКС: Ищем по текущему ID, базовому ID группы, или generic (null)
         query = query.or(`team_id.eq.${teamId},team_id.eq.${groupBaseId},team_id.is.null`);
     } else if (taskId === 4 || taskId === 13) { 
-        // Task 4 and 13 are fully generic (only null allowed)
         query = query.is('team_id', null);
     } 
     
@@ -206,7 +201,6 @@ export async function updateTaskAndInventory(teamId, newTasks, newInventory) {
     return { success: true };
 }
 
-// НОВАЯ ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ОБНОВЛЕНИЯ ПРОИЗВОЛЬНЫХ ПОЛЕЙ КОМАНДЫ
 export async function updateTeam(updateObject, teamId = state.me.team_id) {
     const { error } = await supabase.from('teams')
         .update(updateObject)
@@ -234,7 +228,8 @@ export async function updateTeamFreezeStatus(teamId, durationMs) {
 }
 
 
-// --- TENT & CRAFT LOGIC ---
+// --- GAMEPLAY LOGIC ---
+
 export async function setTentStatus(tentId) {
     if (!state.currentTeam) return;
     await supabase.from('teams').update({ current_tent_id: tentId }).eq('id', state.me.team_id);
@@ -270,34 +265,59 @@ export async function useGadgetLogic(itemId, targetTeamId) {
     if (error) return { success: false, msg: error.message };
     if (data && !data.success) return { success: false, msg: data.message };
     
-    // Обновляем состояние только при УСПЕШНОМ использовании
     state.lastGadgetUsage = Date.now(); 
     return { success: true };
 }
 
+// === НОВАЯ ЛОГИКА ПОИСКА (SCAVENGE) ===
+// Полный рандом + возможность найти несколько предметов
 export async function scavengeItemLogic() {
     const roll = Math.random();
-    let itemId = null;
-    let quantity = 0;
-    let message = "🥶 Вы нашли только ледяную крошку. Ничего не найдено."; // 50%
-
-    if (roll < 0.10) { // 10% шанс на Гаджет
-        const randomIndex = Math.floor(Math.random() * GADGET_POOL.length);
-        itemId = GADGET_POOL[randomIndex];
-        quantity = 1; 
-        message = `🎉 Вам повезло! Найден редкий **Гаджет**!`;
-    } else if (roll < 0.50) { // 40% шанс на Ресурс
-        const randomIndex = Math.floor(Math.random() * RESOURCE_POOL.length);
-        itemId = RESOURCE_POOL[randomIndex];
-        quantity = Math.floor(Math.random() * 5) + 1; // 1-5 единиц ресурса
-        message = `✨ Найден полезный **Ресурс**!`;
+    
+    // Шанс 20%, что не найдем ничего
+    if (roll < 0.20) {
+        return { success: true, message: "🥶 Вы перерыли весь сугроб, но нашли только ледяную крошку.", itemId: null };
     }
 
-    if (!itemId) return { success: true, message: message, itemId: null };
+    // Определяем количество находок (от 1 до 3 предметов)
+    const lootCount = Math.floor(Math.random() * 3) + 1; 
+    const foundItems = {};
+    const messages = [];
 
+    for (let i = 0; i < lootCount; i++) {
+        const itemRoll = Math.random();
+        let itemId = null;
+        let qty = 1;
+
+        if (itemRoll < 0.15) { 
+            // 15% Шанс на ГАДЖЕТ
+            const idx = Math.floor(Math.random() * GADGET_POOL.length);
+            itemId = GADGET_POOL[idx];
+            qty = 1; // Гаджеты по 1
+        } else {
+            // 85% Шанс на РЕСУРС
+            const idx = Math.floor(Math.random() * RESOURCE_POOL.length);
+            itemId = RESOURCE_POOL[idx];
+            qty = Math.floor(Math.random() * 2) + 1; // 1 или 2 ресурса
+        }
+
+        if (itemId) {
+            foundItems[itemId] = (foundItems[itemId] || 0) + qty;
+        }
+    }
+
+    // Обновляем инвентарь
     const newInventory = { ...state.currentTeam.inventory };
-    newInventory[itemId] = (newInventory[itemId] || 0) + quantity;
-    
+    let msgStr = "Найдено: ";
+
+    for (const [id, count] of Object.entries(foundItems)) {
+        newInventory[id] = (newInventory[id] || 0) + count;
+        const itemDef = state.globalItems[id];
+        const emoji = itemDef?.emoji?.startsWith('http') ? '📦' : (itemDef?.emoji || '📦');
+        msgStr += `${emoji} ${itemDef?.name || '???'} x${count}, `;
+    }
+
+    // Сохраняем в БД
     const { error } = await supabase.from('teams').update({
         inventory: newInventory
     }).eq('id', state.me.team_id);
@@ -311,14 +331,13 @@ export async function scavengeItemLogic() {
     
     return { 
         success: true, 
-        message: `${message} (+${quantity} ${state.globalItems[itemId]?.emoji || '🎁'} ${state.globalItems[itemId]?.name || '???'})`,
-        itemId: itemId 
+        message: msgStr.slice(0, -2) + "!", // Удаляем последнюю запятую
+        itemId: 'multiple' 
     };
 }
 
 
 export function setupRealtimeListeners(onMyTeamUpdate, onGlobalUpdate) {
-    // ... (функция без изменений)
     supabase.channel('my_team_updates')
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'teams', filter: `id=eq.${state.me.team_id}` }, payload => {
             onMyTeamUpdate(payload.new, payload.old);
@@ -335,7 +354,7 @@ export function setupRealtimeListeners(onMyTeamUpdate, onGlobalUpdate) {
         .subscribe();
 }
 
-// ===== TRADE SYSTEM FUNCTIONS (исправлена логика принятия) =====
+// ===== TRADE SYSTEM FUNCTIONS =====
 
 export async function sendTradeRequest(toTeamId, offerItemId, requestItemId) {
     const inv = state.currentTeam?.inventory || {};
@@ -388,7 +407,6 @@ export async function fetchIncomingTrades() {
 export async function respondToTrade(tradeId, accept = true) {
     const newStatus = accept ? 'accepted' : 'rejected';
     
-    // Получаем данные обмена
     const { data: trade, error: fetchError } = await supabase
         .from('trade_requests')
         .select('*')
@@ -401,73 +419,31 @@ export async function respondToTrade(tradeId, accept = true) {
     
     if (accept) {
         try {
-            // Получаем актуальные данные команд
-            const { data: fromTeam } = await supabase
-                .from('teams')
-                .select('inventory')
-                .eq('id', trade.from_team_id)
-                .single();
-            
-            // Получаем актуальные данные нашей команды (мы - toTeam)
-            const { data: toTeam } = await supabase
-                .from('teams')
-                .select('inventory')
-                .eq('id', state.me.team_id)
-                .single();
+            const { data: fromTeam } = await supabase.from('teams').select('inventory').eq('id', trade.from_team_id).single();
+            const { data: toTeam } = await supabase.from('teams').select('inventory').eq('id', state.me.team_id).single();
 
-            if (!fromTeam || !toTeam) {
-                return { success: false, msg: 'Одна из команд не найдена' };
-            }
+            if (!fromTeam || !toTeam) return { success: false, msg: 'Команда не найдена' };
 
             const invFrom = { ...fromTeam.inventory };
             const invTo = { ...toTeam.inventory };
 
-            // Проверка наличия предметов на момент принятия
-            if ((invFrom[trade.offer_item_id] || 0) < 1) {
-                return { success: false, msg: 'У отправителя больше нет предмета для обмена' };
-            }
-            if ((invTo[trade.request_item_id] || 0) < 1) {
-                return { success: false, msg: 'У вас больше нет запрашиваемого предмета' };
-            }
+            if ((invFrom[trade.offer_item_id] || 0) < 1) return { success: false, msg: 'Предмет уже недоступен' };
+            if ((invTo[trade.request_item_id] || 0) < 1) return { success: false, msg: 'У вас нет требуемого предмета' };
 
-            // === ВЫПОЛНЕНИЕ ОБМЕНА ===
             invFrom[trade.offer_item_id]--;
             invFrom[trade.request_item_id] = (invFrom[trade.request_item_id] || 0) + 1;
             invTo[trade.request_item_id]--;
             invTo[trade.offer_item_id] = (invTo[trade.offer_item_id] || 0) + 1;
 
-            // Обновляем инвентарь (атомарно, насколько это возможно в JS)
-            const { error: err1 } = await supabase
-                .from('teams')
-                .update({ inventory: invFrom })
-                .eq('id', trade.from_team_id);
-
-            const { error: err2 } = await supabase
-                .from('teams')
-                .update({ inventory: invTo })
-                .eq('id', state.me.team_id);
-
-            if (err1 || err2) {
-                console.error('Inventory update error:', err1 || err2);
-                return { success: false, msg: 'Ошибка при обновлении инвентаря' };
-            }
+            await supabase.from('teams').update({ inventory: invFrom }).eq('id', trade.from_team_id);
+            await supabase.from('teams').update({ inventory: invTo }).eq('id', state.me.team_id);
 
         } catch (e) {
-            console.error('Critical trade execution error:', e);
-            return { success: false, msg: 'Системная ошибка при выполнении обмена' };
+            console.error('Trade error:', e);
+            return { success: false, msg: 'Ошибка обмена' };
         }
     }
     
-    // Обновляем статус ТОЛЬКО после успешного обмена или если это был reject
-    const { error: updateError } = await supabase
-        .from('trade_requests')
-        .update({ status: newStatus })
-        .eq('id', tradeId);
-        
-    if (updateError) {
-        console.error('Final trade status update error:', updateError);
-        return { success: false, msg: 'Ошибка при финальном обновлении статуса обмена' };
-    }
-
-    return { success: true };
+    const { error } = await supabase.from('trade_requests').update({ status: newStatus }).eq('id', tradeId);
+    return { success: !error };
 }
