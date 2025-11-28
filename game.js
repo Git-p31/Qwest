@@ -17,7 +17,7 @@ window.TEAMS_UI_CONFIG = TEAMS_UI_CONFIG;
 
 const TELEGRAM_GROUP_LINK = 'https://t.me/stuttgart_quest_group'; 
 const MAX_SNOW_PILES = 1; 
-const LAST_CHANCE_DURATION_MS = 5 * 60 * 1000; // 5 минут для режима "Последний шанс"
+const LAST_CHANCE_DURATION_MS = 5 * 60 * 1000; // 5 минут
 
 window.TELEGRAM_GROUP_LINK = TELEGRAM_GROUP_LINK;
 
@@ -92,11 +92,17 @@ async function initGame() {
 
     const teamId = Core.state.me.team_id;
     try {
+        let m;
         if (teamId === 101 || teamId === 103) {
-            MissionLogic = await import('./missions_101_103.js');
+            m = await import('./missions_101_103.js');
         } else if (teamId === 102 || teamId === 104) {
-            MissionLogic = await import('./missions_102_104.js');
+            m = await import('./missions_102_104.js');
         }
+        
+        if (m) {
+            MissionLogic = { ...m };
+        }
+        
         assignGlobalFunctions(); 
     } catch (e) {
         console.error("Ошибка загрузки MissionLogic:", e);
@@ -663,15 +669,219 @@ window.handleItemUse = async (id) => {
     } else { alert("Гаджет не настроен."); }
 };
 
+// ⚒️ ФУНКЦИЯ ОТРИСОВКИ КРАФТА (ДОБАВЛЕНА!)
+function renderCraftUI() {
+    const container = document.getElementById('craftRecipesList');
+    if (!container) return;
+    container.innerHTML = '';
+
+    Core.CRAFT_RECIPES.forEach(recipe => {
+        const resultItem = Core.state.globalItems[recipe.resultId];
+        if (!resultItem) return;
+
+        let canCraft = true;
+        let ingredientsHtml = '';
+
+        recipe.ingredients.forEach(ing => {
+            const item = Core.state.globalItems[ing.id];
+            const hasCount = (Core.state.currentTeam.inventory && Core.state.currentTeam.inventory[ing.id]) || 0;
+            const missing = hasCount < ing.count;
+            if (missing) canCraft = false;
+
+            const iconHtml = (item.emoji && item.emoji.startsWith('http')) 
+                ? `<img src="${item.emoji}" class="ing-icon" style="width:24px;">` 
+                : `<span class="ing-icon">${item.emoji || '📦'}</span>`;
+
+            ingredientsHtml += `
+                <div class="ingredient-box ${missing ? 'missing' : 'has-it'}">
+                    ${iconHtml}
+                    <span class="ing-count">${hasCount}/${ing.count}</span>
+                </div>
+            `;
+        });
+
+        const resultIconHtml = (resultItem.emoji && resultItem.emoji.startsWith('http')) 
+            ? `<img src="${resultItem.emoji}" style="width:32px;">` 
+            : `${resultItem.emoji || '🎁'}`;
+
+        const btnState = canCraft ? '' : 'disabled';
+        const btnClass = canCraft ? 'start-button' : 'start-button disabled';
+
+        const html = `
+        <div class="craft-recipe">
+            <div class="recipe-header">
+                <span style="font-weight:bold; color:var(--accent-gold);">${recipe.name}</span>
+                <span class="muted" style="font-size:0.8rem;">${recipe.description}</span>
+            </div>
+            <div class="recipe-row">
+                <div class="ingredients-group">
+                    ${ingredientsHtml}
+                </div>
+                <div class="arrow-sign">➔</div>
+                <div class="craft-result pulse-gold">
+                    ${resultIconHtml}
+                </div>
+            </div>
+            <button class="${btnClass}" ${btnState} onclick="window.doCraft(${recipe.id})" style="margin-top:10px; font-size:0.9rem; padding:10px;">
+                СОЗДАТЬ
+            </button>
+        </div>`;
+
+        container.innerHTML += html;
+    });
+}
+
 window.openCraftModal = () => {
     if(Core.state.me.role !== 'Explorer') return alert("Только Исследователь!");
-    window.closeModal('craftModal'); document.getElementById('craftModal').classList.remove('hidden'); renderCraftUI();
+    window.closeModal('craftModal'); 
+    document.getElementById('craftModal').classList.remove('hidden'); 
+    renderCraftUI(); // Теперь эта функция определена выше!
 };
 
 window.doCraft = async (rid) => {
     const res = await Core.craftItemLogic(rid);
     if(res.success) { alert(`Создано: ${res.itemName}`); renderCraftUI(); renderGameInterface(); }
     else alert(res.msg);
+};
+
+// =======================================================
+// ===== VI. TRADE SYSTEM UI (СИСТЕМА ОБМЕНА) =====
+// =======================================================
+
+window.openTradeModal = () => {
+    const modal = document.getElementById('tradeModal');
+    const targetSelect = document.getElementById('tradeTargetTeam');
+    const offerSelect = document.getElementById('tradeOfferSelect');
+    const requestSelect = document.getElementById('tradeRequestSelect');
+
+    // 1. Заполняем список команд (Кому)
+    targetSelect.innerHTML = '';
+    Core.state.otherTeams.forEach(t => {
+        targetSelect.innerHTML += `<option value="${t.id}">${t.name_by_leader || t.name}</option>`;
+    });
+
+    // 2. Заполняем список "Отдаем" (Наш инвентарь)
+    offerSelect.innerHTML = '';
+    const myInv = Core.state.currentTeam.inventory || {};
+    let hasOfferItems = false;
+    
+    Object.keys(myInv).forEach(itemId => {
+        if (myInv[itemId] > 0) {
+            hasOfferItems = true;
+            const item = Core.state.globalItems[itemId];
+            offerSelect.innerHTML += `<option value="${itemId}">${item ? item.name : '???'}</option>`;
+        }
+    });
+
+    if (!hasOfferItems) {
+        offerSelect.innerHTML = '<option value="" disabled selected>Инвентарь пуст...</option>';
+    }
+
+    // 3. Заполняем список "Просим" (Все предметы игры)
+    requestSelect.innerHTML = '';
+    Object.values(Core.state.globalItems).forEach(item => {
+        // Можно добавить фильтр, чтобы нельзя было просить квестовые предметы, если нужно
+        requestSelect.innerHTML += `<option value="${item.id}">${item.name}</option>`;
+    });
+
+    modal.classList.remove('hidden');
+};
+
+window.sendTradeRequest = async () => {
+    const targetId = document.getElementById('tradeTargetTeam').value;
+    const offerId = document.getElementById('tradeOfferSelect').value;
+    const requestId = document.getElementById('tradeRequestSelect').value;
+
+    if (!targetId || !offerId || !requestId) return alert("Заполните все поля!");
+
+    // Блокируем кнопку на время запроса
+    const btn = document.querySelector('#tradeModal .start-button');
+    const oldText = btn.textContent;
+    btn.textContent = "Отправка...";
+    btn.disabled = true;
+
+    const res = await Core.sendTradeRequest(targetId, offerId, requestId);
+    
+    btn.textContent = oldText;
+    btn.disabled = false;
+
+    if (res.success) {
+        alert("✅ Предложение отправлено!");
+        window.closeModal('tradeModal');
+    } else {
+        alert("❌ Ошибка: " + res.msg);
+    }
+};
+
+window.openIncomingTrades = async () => {
+    const modal = document.getElementById('incomingTradesModal');
+    const list = document.getElementById('incomingTradesList');
+    
+    list.innerHTML = '<div style="text-align:center; padding:20px;"><div class="loader-spinner"></div><p>Загрузка...</p></div>';
+    modal.classList.remove('hidden');
+
+    const trades = await Core.fetchIncomingTrades();
+    
+    if (!trades || trades.length === 0) {
+        list.innerHTML = '<p class="muted" style="text-align:center; padding:20px;">Нет входящих предложений.</p>';
+        return;
+    }
+
+    list.innerHTML = '';
+    trades.forEach(t => {
+        const offerItem = Core.state.globalItems[t.offer_item_id];
+        const requestItem = Core.state.globalItems[t.request_item_id];
+        
+        const offerName = offerItem ? offerItem.name : '???';
+        const requestName = requestItem ? requestItem.name : '???';
+
+        // Отображение иконок
+        const offerIcon = offerItem?.emoji?.startsWith('http') 
+            ? `<img src="${offerItem.emoji}" style="width:24px; vertical-align:middle;">` 
+            : (offerItem?.emoji || '📦');
+            
+        const reqIcon = requestItem?.emoji?.startsWith('http') 
+            ? `<img src="${requestItem.emoji}" style="width:24px; vertical-align:middle;">` 
+            : (requestItem?.emoji || '📦');
+
+        list.innerHTML += `
+        <div class="incoming-trade-card">
+            <p style="margin-bottom:8px; font-weight:bold; color:var(--accent-gold); border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px;">
+                От команды: ${t.from_team_name}
+            </p>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px; font-size:0.9rem;">
+                <div style="background:rgba(0,255,0,0.1); padding:5px; border-radius:5px;">
+                    <span style="color:var(--accent-green); display:block; font-size:0.7rem;">ВАМ ДАЮТ:</span>
+                    ${offerIcon} ${offerName}
+                </div>
+                <div style="background:rgba(255,0,0,0.1); padding:5px; border-radius:5px;">
+                    <span style="color:var(--accent-red); display:block; font-size:0.7rem;">ВЫ ОТДАЕТЕ:</span>
+                    ${reqIcon} ${requestName}
+                </div>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button class="start-button" style="margin:0; background:var(--accent-green); font-size:0.8rem;" onclick="window.acceptTrade(${t.id})">✅ ПРИНЯТЬ</button>
+                <button class="start-button" style="margin:0; background:var(--accent-red); font-size:0.8rem;" onclick="window.rejectTrade(${t.id})">❌ ОТКЛОНИТЬ</button>
+            </div>
+        </div>`;
+    });
+};
+
+window.acceptTrade = async (tradeId) => {
+    const res = await Core.respondToTrade(tradeId, true);
+    if (res.success) {
+        alert("✅ Обмен успешно совершен!");
+        window.openIncomingTrades(); // Обновить список
+        await Core.refreshTeamData(); // Обновить свой инвентарь
+        window.renderGameInterface();
+    } else {
+        alert("❌ Ошибка: " + res.msg);
+    }
+};
+
+window.rejectTrade = async (tradeId) => {
+    await Core.respondToTrade(tradeId, false);
+    window.openIncomingTrades(); // Обновить список
 };
 
 // --- GLOBAL EXPORTS ---
