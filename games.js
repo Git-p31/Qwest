@@ -1,16 +1,46 @@
 import * as Core from './core.js';
 
-// Глобальное состояние мини-игр
+// ==========================================
+// ===== ГЛОБАЛЬНОЕ СОСТОЯНИЕ =====
+// ==========================================
 let gameState = {
     activeGame: null, // 'tictactoe' или 'bingo'
     board: [],
     isPlayerTurn: true,
     gameActive: false,
     opponentId: null,
-    bingoNumbers: [], 
-    playerBingoCount: 0,
-    botBingoCount: 0
+    
+    // Состояние Бинго
+    bingoGrid: [], // { answer, marked }
+    bingoQuestionsDeck: [], // Очередь вопросов
+    currentQuestion: null,
+    bingoTimerInterval: null,
+    timeLeft: 10
 };
+
+// ==========================================
+// ===== ДАННЫЕ ДЛЯ БИНГО (15 вопросов) =====
+// ==========================================
+const BINGO_QUESTIONS = [
+    { a: "🎅", q: "Кто приносит подарки послушным детям?" },
+    { a: "🎄", q: "Зеленая красавица, которую наряжают раз в году?" },
+    { a: "☃️", q: "Кого лепят из снега, вставляя морковку вместо носа?" },
+    { a: "❄️", q: "Уникальный ледяной кристаллик, падающий с неба?" },
+    { a: "🎁", q: "Что принято класть под елку?" },
+    { a: "🎆", q: "Громкие и яркие огни в небе в новогоднюю ночь?" },
+    { a: "🍊", q: "Главный новогодний цитрус (фрукт)?" },
+    { a: "🥂", q: "Напиток, который открывают под бой курантов?" },
+    { a: "🕰️", q: "Что бьет 12 раз, возвещая начало Нового года?" },
+    { a: "🕯️", q: "Что зажигают для уюта и тепла на праздник?" },
+    { a: "🛷", q: "Транспорт Деда Мороза?" },
+    { a: "🌨️", q: "Сильный снегопад с ветром?" },
+    { a: "🧤", q: "Что надевают на руки, чтобы играть в снежки?" },
+    { a: "⛸️", q: "На чем катаются по льду?" },
+    { a: "🔔", q: "Звук рождественских колокольчиков?" }
+];
+
+// Дополнительные эмодзи-обманки для заполнения поля до 25 клеток
+const BINGO_FILLERS = ["🤡", "🎃", "👻", "👽", "🤖", "🌵", "🍕", "🚗", "✈️", "🚀"];
 
 // ==========================================
 // ===== 1. ВЫЗОВ И ПОДГОТОВКА =====
@@ -19,15 +49,16 @@ let gameState = {
 export const openGameChallengeModal = (gameType) => {
     gameState.activeGame = gameType;
     const modal = document.getElementById('gameChallengeModal');
-    const title = gameType === 'tictactoe' ? '⚔️ КРЕСТИКИ-НОЛИКИ' : '🎰 БИНГО';
+    const title = gameType === 'tictactoe' ? '⚔️ КРЕСТИКИ-НОЛИКИ' : '🎄 НОВОГОДНЕЕ БИНГО';
     
     // Сброс UI
     document.getElementById('gameChallengeStep1').classList.remove('hidden');
     document.getElementById('gameBoardArea').classList.add('hidden');
     document.getElementById('gameBoardContainer').innerHTML = '';
-    document.getElementById('gameStatusText').textContent = 'Подготовка...';
     
-    // Заполняем список команд (исключаем замороженных и свою команду)
+    const statusText = document.getElementById('gameStatusText');
+    if(statusText) statusText.textContent = 'Подготовка...';
+    
     const select = document.getElementById('gameTargetTeam');
     select.innerHTML = '<option value="">-- Выберите соперника --</option>';
     
@@ -48,24 +79,21 @@ export const startChallenge = async () => {
     
     gameState.opponentId = targetId;
     
-    // Эмуляция подключения (Визуальный эффект)
     const btn = document.getElementById('btnSendChallenge');
     const originalText = btn.textContent;
-    btn.textContent = "📡 ОТПРАВКА ВЫЗОВА...";
+    btn.textContent = "📡 ПОДКЛЮЧЕНИЕ...";
     btn.disabled = true;
 
-    await new Promise(r => setTimeout(r, 1500)); // Задержка 1.5 сек
+    await new Promise(r => setTimeout(r, 1000));
 
-    btn.textContent = "✅ ВЫЗОВ ПРИНЯТ!";
-    await new Promise(r => setTimeout(r, 800));
+    btn.textContent = "✅ ГОТОВО!";
+    await new Promise(r => setTimeout(r, 500));
 
-    // Переход к игре
     document.getElementById('gameChallengeStep1').classList.add('hidden');
     document.getElementById('gameBoardArea').classList.remove('hidden');
     btn.textContent = originalText;
     btn.disabled = false;
 
-    // Запуск конкретной игры
     if (gameState.activeGame === 'tictactoe') initTicTacToe();
     else initBingo();
 };
@@ -85,34 +113,39 @@ function initTicTacToe() {
 function renderTicTacToeBoard() {
     const container = document.getElementById('gameBoardContainer');
     container.className = 'ttt-grid'; 
+    // Принудительные стили для сетки
+    container.style.display = 'grid';
+    container.style.gridTemplateColumns = 'repeat(3, 1fr)'; 
+    container.style.gap = '5px';
+    container.style.maxWidth = '300px';
+    container.style.margin = '0 auto';
+    
     container.innerHTML = gameState.board.map((cell, i) => `
-        <div class="ttt-cell ${cell ? 'taken' : ''}" id="cell-${i}" onclick="window.handleGameMove(${i})">
+        <div class="ttt-cell ${cell ? 'taken' : ''}" 
+             id="cell-${i}" 
+             onclick="window.handleGameMove(${i})"
+             style="aspect-ratio: 1; background: rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-size: 2rem; cursor: pointer; border: 1px solid #444;">
             ${cell || ''}
         </div>
     `).join('');
 }
 
 export const handleGameMove = (index) => {
-    if (!gameState.gameActive || gameState.board[index] || !gameState.isPlayerTurn) return;
+    if (gameState.activeGame !== 'tictactoe' || !gameState.gameActive || gameState.board[index] || !gameState.isPlayerTurn) return;
 
-    // Ход игрока
     gameState.board[index] = '❌';
     renderTicTacToeBoard();
     
-    // Проверка победы игрока
     const winCombo = checkWinner('❌');
     if (winCombo) {
         highlightWin(winCombo);
         return endGame(true);
     }
     
-    // Ничья?
     if (!gameState.board.includes(null)) return endGame(false); 
 
-    // Передача хода боту
     gameState.isPlayerTurn = false;
     updateGameStatus("Ход соперника...");
-    
     setTimeout(botMakeMoveTTT, 1000);
 };
 
@@ -121,7 +154,6 @@ function botMakeMoveTTT() {
 
     const emptyIndices = gameState.board.map((v, i) => v === null ? i : null).filter(v => v !== null);
     if (emptyIndices.length > 0) {
-        // Бот ходит случайно (можно улучшить до minmax, но для фана хватит рандома)
         const randomIdx = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
         gameState.board[randomIdx] = '⭕';
         renderTicTacToeBoard();
@@ -129,22 +161,17 @@ function botMakeMoveTTT() {
         const winCombo = checkWinner('⭕');
         if (winCombo) {
             highlightWin(winCombo);
-            return endGame(false); // Игрок проиграл
+            return endGame(false);
         }
         
-        if (!gameState.board.includes(null)) return endGame(false); // Ничья = проигрыш (жестко)
+        if (!gameState.board.includes(null)) return endGame(false);
     }
-    
     gameState.isPlayerTurn = true;
     updateGameStatus("Ваш ход!");
 }
 
 function checkWinner(symbol) {
-    const wins = [
-        [0,1,2], [3,4,5], [6,7,8], 
-        [0,3,6], [1,4,7], [2,5,8], 
-        [0,4,8], [2,4,6]           
-    ];
+    const wins = [[0,1,2], [3,4,5], [6,7,8], [0,3,6], [1,4,7], [2,5,8], [0,4,8], [2,4,6]];
     return wins.find(combo => combo.every(i => gameState.board[i] === symbol));
 }
 
@@ -153,85 +180,178 @@ function highlightWin(combo) {
 }
 
 // ==========================================
-// ===== 3. ЛОГИКА БИНГО =====
+// ===== 3. ЛОГИКА БИНГО (5x5 + ЭМОДЗИ) =====
 // ==========================================
 
 function initBingo() {
-    // Генерируем числа 1-16 в случайном порядке
-    const numbers = Array.from({length: 16}, (_, i) => i + 1).sort(() => Math.random() - 0.5);
-    gameState.bingoNumbers = numbers.map(val => ({val, owner: null}));
+    // 1. Формируем пул: 15 правильных + 10 обманок = 25
+    // ВАЖНО: Приводим все объекты к единому ключу 'answer'
+    const fillers = BINGO_FILLERS.map(emoji => ({ answer: emoji, marked: false }));
+    const correct = BINGO_QUESTIONS.map(item => ({ answer: item.a, marked: false }));
     
+    const fullGrid = [...correct, ...fillers].sort(() => Math.random() - 0.5);
+    
+    gameState.bingoGrid = fullGrid;
+
+    // 2. Колода вопросов
+    gameState.bingoQuestionsDeck = [...BINGO_QUESTIONS].sort(() => Math.random() - 0.5);
+    gameState.currentQuestion = null;
     gameState.gameActive = true;
-    gameState.isPlayerTurn = true;
+
+    // 3. Рендер поля
     renderBingoBoard();
-    updateGameStatus("Соберите линию (4 в ряд/диагональ) первым!");
+    
+    // 4. Старт цикла вопросов
+    startBingoQuestionCycle();
 }
 
 function renderBingoBoard() {
     const container = document.getElementById('gameBoardContainer');
+    
+    // === СТИЛИ СЕТКИ (Fix растягивания) ===
     container.className = 'bingo-grid';
-    container.innerHTML = gameState.bingoNumbers.map((cell, i) => {
-        let styleClass = '';
-        if (cell.owner === 'player') styleClass = 'bingo-player';
-        if (cell.owner === 'bot') styleClass = 'bingo-bot';
+    container.style.display = 'grid';           
+    container.style.gridTemplateColumns = 'repeat(5, 1fr)';
+    container.style.gap = '8px';                
+    container.style.width = '100%';             
+    container.style.maxWidth = '400px';         
+    container.style.margin = '0 auto';          
+
+    // === ШАПКА ВОПРОСА ===
+    const boardArea = document.getElementById('gameBoardArea');
+    let qDiv = document.getElementById('bingoQuestionHeader');
+    
+    if (!qDiv) {
+        qDiv = document.createElement('div');
+        qDiv.id = 'bingoQuestionHeader';
+        boardArea.insertBefore(qDiv, container);
+    }
+
+    if (gameState.currentQuestion) {
+        qDiv.innerHTML = `
+            <div style="background: rgba(0,0,0,0.6); border: 2px solid #FFD700; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: center; box-shadow: 0 0 15px rgba(255,215,0,0.3);">
+                <p style="font-size: 1.1rem; color: #fff; margin-bottom: 10px; font-weight:bold;">${gameState.currentQuestion.q}</p>
+                <div style="height: 8px; background: #333; border-radius: 4px; overflow: hidden;">
+                    <div id="bingoTimerBar" style="width: 100%; height: 100%; background: linear-gradient(90deg, #FFD700, #FF4500); transition: width 1s linear;"></div>
+                </div>
+                <p style="font-size: 0.8rem; color: #aaa; margin-top: 5px;">Смена через: <span id="bingoTimeText">${gameState.timeLeft}</span> сек</p>
+            </div>
+        `;
+    }
+
+    // === РЕНДЕР ЯЧЕЕК (Fix undefined) ===
+    const gridHtml = gameState.bingoGrid.map((cell, i) => {
+        // Определяем стили в зависимости от того, нажата клетка или нет
+        const bgStyle = cell.marked ? 'rgba(46, 204, 113, 0.3)' : 'rgba(255,255,255,0.05)';
+        const borderStyle = cell.marked ? '1px solid #2ecc71' : '1px solid rgba(255,255,255,0.15)';
         
-        return `<div class="bingo-cell ${styleClass}" onclick="window.handleBingoClick(${i})">
-            ${cell.val}
+        return `<div class="bingo-cell" 
+                     style="font-size: 2rem; aspect-ratio: 1; display:flex; align-items:center; justify-content:center; text-align:center; 
+                            border: ${borderStyle}; background: ${bgStyle}; border-radius: 8px; cursor: pointer; user-select: none; transition: all 0.2s;" 
+                     id="bingo-cell-${i}"
+                     onclick="window.handleBingoClick(${i})">
+            ${cell.answer}
         </div>`;
     }).join('');
+
+    // Скрываем обычный статус текст, так как есть красивая плашка
+    const statusText = document.getElementById('gameStatusText');
+    if (statusText) statusText.style.display = 'none'; 
+    
+    container.innerHTML = gridHtml;
+}
+
+function startBingoQuestionCycle() {
+    nextQuestion();
+
+    if (gameState.bingoTimerInterval) clearInterval(gameState.bingoTimerInterval);
+    
+    gameState.bingoTimerInterval = setInterval(() => {
+        gameState.timeLeft--;
+        
+        const bar = document.getElementById('bingoTimerBar');
+        const text = document.getElementById('bingoTimeText');
+        if (bar) bar.style.width = `${(gameState.timeLeft / 20) * 100}%`;
+        if (text) text.textContent = gameState.timeLeft;
+
+        if (gameState.timeLeft <= 0) {
+            nextQuestion(); 
+        }
+    }, 1000);
+}
+
+function nextQuestion() {
+    if (!gameState.gameActive) return;
+    
+    if (gameState.bingoQuestionsDeck.length === 0) {
+        gameState.bingoQuestionsDeck = [...BINGO_QUESTIONS].sort(() => Math.random() - 0.5);
+    }
+
+    gameState.currentQuestion = gameState.bingoQuestionsDeck.pop();
+    gameState.timeLeft = 20; 
+    
+    renderBingoBoard();
 }
 
 export const handleBingoClick = (index) => {
-    if (!gameState.gameActive || !gameState.isPlayerTurn || gameState.bingoNumbers[index].owner) return;
+    if (gameState.activeGame !== 'bingo' || !gameState.gameActive) return;
 
-    gameState.bingoNumbers[index].owner = 'player';
-    renderBingoBoard();
+    const cell = gameState.bingoGrid[index];
+    if (cell.marked) return; 
+    
+    if (!gameState.currentQuestion) return;
 
-    if (checkBingoWin('player')) return endGame(true);
-
-    gameState.isPlayerTurn = false;
-    updateGameStatus("Соперник думает...");
-
-    setTimeout(botMakeMoveBingo, 1000);
+    // Сверка: cell.answer против текущего вопроса .a
+    if (cell.answer === gameState.currentQuestion.a) {
+        cell.marked = true;
+        
+        // Визуальное обновление (перерисовка или прямой стиль)
+        const div = document.getElementById(`bingo-cell-${index}`);
+        if(div) {
+            div.style.background = 'rgba(46, 204, 113, 0.3)';
+            div.style.border = '1px solid #2ecc71';
+        }
+        
+        if (checkBingoWin5x5()) {
+            clearInterval(gameState.bingoTimerInterval);
+            return endGame(true);
+        }
+    } else {
+        // Ошибка - красный цвет
+        const div = document.getElementById(`bingo-cell-${index}`);
+        if(div) {
+            div.style.background = 'rgba(217, 0, 38, 0.6)'; 
+            setTimeout(() => { 
+                if(!cell.marked) div.style.background = 'rgba(255,255,255,0.05)'; 
+            }, 400);
+        }
+    }
 };
 
-function botMakeMoveBingo() {
-    if (!gameState.gameActive) return;
-
-    const available = gameState.bingoNumbers.map((c, i) => c.owner === null ? i : null).filter(i => i !== null);
-    if (available.length > 0) {
-        // Бот пытается выбрать клетку
-        const pick = available[Math.floor(Math.random() * available.length)];
-        gameState.bingoNumbers[pick].owner = 'bot';
-        renderBingoBoard();
-        
-        if (checkBingoWin('bot')) return endGame(false);
-    }
-    
-    if (available.length === 0) return endGame(false); // Поле кончилось, а игрок не выиграл
-
-    gameState.isPlayerTurn = true;
-    updateGameStatus("Ваш ход!");
-}
-
-function checkBingoWin(owner) {
-    const size = 4;
-    const grid = gameState.bingoNumbers;
-    // Проверка строк, колонок и диагоналей
-    // (Упрощенная логика проверки линий)
-    const checkLine = (indices) => indices.every(i => grid[i].owner === owner);
+function checkBingoWin5x5() {
+    const size = 5;
+    const grid = gameState.bingoGrid;
+    const checkLine = (indices) => indices.every(i => grid[i].marked);
 
     // Строки
     for(let r=0; r<size; r++) {
-        if(checkLine([r*4, r*4+1, r*4+2, r*4+3])) return true;
+        let indices = [];
+        for(let c=0; c<size; c++) indices.push(r*size + c);
+        if(checkLine(indices)) return true;
     }
     // Колонки
     for(let c=0; c<size; c++) {
-        if(checkLine([c, c+4, c+8, c+12])) return true;
+        let indices = [];
+        for(let r=0; r<size; r++) indices.push(r*size + c);
+        if(checkLine(indices)) return true;
     }
     // Диагонали
-    if(checkLine([0, 5, 10, 15])) return true;
-    if(checkLine([3, 6, 9, 12])) return true;
+    let d1 = [], d2 = [];
+    for(let i=0; i<size; i++) {
+        d1.push(i*size + i);
+        d2.push(i*size + (size-1-i));
+    }
+    if(checkLine(d1) || checkLine(d2)) return true;
 
     return false;
 }
@@ -242,21 +362,22 @@ function checkBingoWin(owner) {
 
 function updateGameStatus(msg) {
     const el = document.getElementById('gameStatusText');
-    if(el) el.textContent = msg;
+    if(el) {
+        el.style.display = 'block';
+        el.textContent = msg;
+    }
 }
 
 async function endGame(isVictory) {
     gameState.gameActive = false;
+    if (gameState.bingoTimerInterval) clearInterval(gameState.bingoTimerInterval);
     
-    // Задержка перед показом результата
     await new Promise(r => setTimeout(r, 500));
     window.closeModal('gameChallengeModal');
 
     if (isVictory) {
-        // --- ПОБЕДА ---
         const teamId = Core.state.me.team_id;
-        
-        // 1. Отмечаем финальную задачу как выполненную в БД
+        // Логика завершения финального задания
         const finalTaskId = (teamId === 101 || teamId === 103) ? 6 : 15;
         const currentTasks = Core.state.currentTeam.tasks;
         const taskIndex = currentTasks.findIndex(t => t.id === finalTaskId);
@@ -264,53 +385,34 @@ async function endGame(isVictory) {
         if (taskIndex !== -1 && !currentTasks[taskIndex].completed) {
             const newTasks = [...currentTasks];
             newTasks[taskIndex].completed = true;
-            
-            // Сохраняем в Supabase
             const updateRes = await Core.updateTaskAndInventory(teamId, newTasks, Core.state.currentTeam.inventory);
             if (!updateRes.success) {
-                alert("Ошибка сохранения прогресса! Сообщите организаторам.");
+                alert("Ошибка сохранения! Сообщите организаторам.");
                 return;
             }
-            // Обновляем локальное состояние
             Core.state.currentTeam.tasks = newTasks;
         }
 
-        // 2. Проверяем, все ли ПРЕДЫДУЩИЕ задания выполнены
-        // Основные ID задач для группы (кроме финала)
         const mainIds = (teamId === 101 || teamId === 103) ? [1, 2, 3, 4, 5] : [10, 11, 12, 13, 14];
-        
         const allMainDone = mainIds.every(id => {
             const t = Core.state.currentTeam.tasks.find(x => x.id === id);
             return t && t.completed;
         });
 
         await Core.refreshTeamData();
-        window.renderGameInterface(); // Обновить галочки в UI
+        if (window.renderGameInterface) window.renderGameInterface();
 
         if (allMainDone) {
-            // ФИНАЛЬНАЯ ГЛОБАЛЬНАЯ ПОБЕДА
-            window.showVictoryModal(
-                "🎉 АБСОЛЮТНАЯ ПОБЕДА!", 
-                "Вы одолели соперника в игре и выполнили все задания! Вы спасли Рождество!"
-            );
+            if(window.showVictoryModal) window.showVictoryModal("🎉 ПОБЕДА!");
+            else alert("🎉 ПОБЕДА! Все задания выполнены!");
         } else {
-            // Победа только в мини-игре
-            alert("🏆 ВЫ ВЫИГРАЛИ БИТВУ!\n\nЗадание выполнено. Но вы еще не завершили остальные миссии. Проверьте список задач!");
+            alert("🏆 БИНГО! Финальное задание выполнено. Завершите остальные миссии!");
         }
 
     } else {
-        // --- ПОРАЖЕНИЕ ---
-        const freezeTime = 2 * 60 * 1000; // 2 минуты
-        
-        // Ставим заморозку в БД
+        const freezeTime = 2 * 60 * 1000;
         await Core.updateTeamFreezeStatus(Core.state.me.team_id, freezeTime);
-        
-        // Обновляем UI (красный экран и таймер)
-        window.handleQuizFailure(Core.state.me.team_id); 
-        
-        // Сообщение
-        setTimeout(() => {
-            alert("❄️ ПОРАЖЕНИЕ!\n\nВаша команда заморожена на 2 минуты. Попробуйте снова, когда лед растает.");
-        }, 500);
+        if(window.handleQuizFailure) window.handleQuizFailure(Core.state.me.team_id);
+        setTimeout(() => alert("❄️ ПОРАЖЕНИЕ! Заморозка на 2 минуты."), 500);
     }
 }
