@@ -462,3 +462,67 @@ export async function getEnemyInventory(targetTeamId) {
     }
     return data;
 }
+
+// ===== REALTIME PVP LOGIC =====
+
+// 1. Создать вызов (начать игру)
+export async function createPvPGame(targetTeamId, gameType) {
+    const myTeamId = state.me.team_id;
+    
+    // Начальное состояние для крестиков-ноликов
+    const initialBoard = Array(9).fill(null);
+    
+    const { data, error } = await supabase.from('active_games').insert({
+        game_type: gameType,
+        team_a_id: myTeamId,      // Вы - инициатор (Крестики ❌)
+        team_b_id: targetTeamId,  // Соперник (Нолики ⭕)
+        current_turn_team_id: myTeamId, // Первый ход ваш
+        board_state: initialBoard,
+        status: 'active'
+    }).select().single();
+
+    if (error) {
+        console.error("Game create error", error);
+        return { success: false, msg: error.message };
+    }
+    return { success: true, game: data };
+}
+
+// 2. Отправить ход
+export async function makeGameMove(gameId, newBoard, nextTurnTeamId) {
+    const { error } = await supabase.from('active_games')
+        .update({ 
+            board_state: newBoard,
+            current_turn_team_id: nextTurnTeamId
+        })
+        .eq('id', gameId);
+        
+    return { success: !error };
+}
+
+// 3. Завершить игру (победа/ничья)
+export async function finishGame(gameId, winnerTeamId) {
+    const { error } = await supabase.from('active_games')
+        .update({ 
+            status: 'finished',
+            winner_team_id: winnerTeamId
+        })
+        .eq('id', gameId);
+        
+    return { success: !error };
+}
+
+// 4. Слушатель входящих игр (для game.js)
+export function subscribeToGames(onGameUpdate) {
+    return supabase.channel('public:active_games')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'active_games' }, payload => {
+            const game = payload.new;
+            const myTeam = state.me.team_id;
+            
+            // Если это касается нас (мы либо создали, либо нас вызвали)
+            if (game && (game.team_a_id === myTeam || game.team_b_id === myTeam)) {
+                onGameUpdate(game);
+            }
+        })
+        .subscribe();
+}

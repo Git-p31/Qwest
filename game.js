@@ -136,7 +136,7 @@ async function initGame() {
     // 7. Global Loops
     setInterval(checkGlobalWinCondition, 1000); 
 
-    // 8. Realtime Listeners
+    // 8. Realtime Listeners (Teams & Map)
     Core.setupRealtimeListeners(
         async (newTeam) => {
             Object.assign(Core.state.currentTeam, newTeam);
@@ -144,6 +144,14 @@ async function initGame() {
         },
         () => { renderMarkers(); }
     );
+
+    // 9. Realtime Listeners (PVP Games)
+    // Слушаем входящие вызовы или обновления ходов
+    Core.subscribeToGames((gamePayload) => {
+        console.log("🔥 PvP Game Update:", gamePayload);
+        // Передаем управление в games.js для отрисовки
+        Games.syncGameFromDB(gamePayload);
+    });
 
     if(['leader', 'Negotiator'].includes(Core.state.me.role)) Core.clearTentStatus();
 }
@@ -541,7 +549,7 @@ function showMissionPopup(missionData) {
     
     const logicId = missionData.taskId > 6 ? missionData.taskId - 9 : missionData.taskId;
     const isFinalGame = logicId === 6;
-    const btnText = isFinalGame ? `ЗАПУСТИТЬ ФИНАЛ` : `НАЧАТЬ ЗАДАНИЕ ${missionData.taskId}`;
+    const btnText = isFinalGame ? `ЗАПУСТИТЬ ФИНАЛ` : `НАЧАТЬ ЗАДАНИЕ`;
     
     document.getElementById('interactButtons').innerHTML = 
         `<button class="start-button" onclick="window.routeTaskToModal(${missionData.taskId}); window.closeModal('interactionModal');">${btnText}</button>`;
@@ -1063,7 +1071,10 @@ Object.assign(window, {
     openSpyModal, performSpyAction,
     openFinalLockModal, tryActivateFinal,
     handleScavengeInteraction, spawnSnowPile,
-    forceLastChance, showVictoryModal, showLostModal, handleQuizFailure
+    forceLastChance, showVictoryModal, showLostModal, handleQuizFailure,
+    
+    // !!! NEW EXPORT FOR PVP !!!
+    syncGameFromDB: Games.syncGameFromDB
 });
 
 // Start
