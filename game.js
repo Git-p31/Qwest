@@ -46,6 +46,40 @@ const FINAL_ITEM_REQUIREMENTS = {
 };
 
 // =======================================================
+// ===== КООРДИНАТЫ ЗАДАНИЙ (ПО ПАЛАТКАМ С КАРТЫ) =====
+// =======================================================
+
+const MISSION_LOCATIONS = {
+    // --- Команды 101 и 103 (ID 1-6) ---
+    // Палатка 31: Слева, во втором блоке снизу
+    1:  { stall: '31',  x: 28, y: 63 }, 
+    // Палатка 105: Внутренний круг, слева сверху
+    2:  { stall: '105', x: 39, y: 47 }, 
+    // Палатка 25: Левый блок, самый нижний угол
+    3:  { stall: '25',  x: 24, y: 73 }, 
+    // Палатка 20: Левый блок, середина (над 21-24)
+    4:  { stall: '20',  x: 24, y: 63 }, 
+    // Палатка 135: Внутренний круг, слева снизу
+    5:  { stall: '135', x: 36, y: 66 }, 
+    // Палатка 75: Правый блок, самый низ
+    6:  { stall: '75',  x: 76, y: 73 }, 
+
+    // --- Команды 102 и 104 (ID 10-15) ---
+    // Палатка 304: Самый верх, слева от церкви
+    10: { stall: '304', x: 38, y: 28 }, 
+    // Палатка 61: Правый блок, вертикальный ряд посередине
+    11: { stall: '61',  x: 65, y: 62 }, 
+    // Палатка 9: Левый блок, верхняя часть (внутренний ряд)
+    12: { stall: '9',   x: 31, y: 56 }, 
+    // Палатка 6: Левый блок, верхняя часть (внешний ряд)
+    13: { stall: '6',   x: 24, y: 52 }, 
+    // Палатка 162: Справа сверху, отдельный блок
+    14: { stall: '162', x: 62, y: 42 }, 
+    // Палатка 80: Правый блок, нижний правый угол
+    15: { stall: '80',  x: 78, y: 73 }, 
+};
+
+// =======================================================
 // ===== SECTION 2: GLOBAL STATE =====
 // =======================================================
 
@@ -172,6 +206,17 @@ function initMapLogic() {
     }, 3000);
 }
 
+// === NEW: Функция отрисовки иконок (поддерживает URL) ===
+function renderItemIcon(item, size = '32px') {
+    if (!item) return '❓';
+    // Если это URL ссылки на картинку
+    if (item.emoji && item.emoji.startsWith('http')) {
+        return `<img src="${item.emoji}" alt="${item.name}" style="width: ${size}; height: ${size}; object-fit: contain; vertical-align: middle; border-radius: 4px;">`;
+    }
+    // Если это просто эмодзи
+    return `<span style="font-size:1.5rem; vertical-align:middle;">${item.emoji || '📦'}</span>`;
+}
+
 function renderMarkers() {
     if(!State.map) return;
     
@@ -211,19 +256,28 @@ function renderMarkers() {
 
 function updateMarker(id, type, x, y, label, data, customSymbol) {
     const loc = [1500 - ((y / 100) * 1500), (x / 100) * 2000];
-    let symbol = customSymbol || '📍';
+    
+    let symbolContent = customSymbol || '📍';
+    
     if (!customSymbol) {
-         if (type === 'tent') symbol = '⛺';
-         else if (type === 'npc') symbol = '👤';
-         else if (type === 'snow_pile') symbol = '❄️';
-         else if (type === 'me') symbol = '🔴';
+         if (type === 'tent') symbolContent = '⛺';
+         else if (type === 'npc') symbolContent = '👤';
+         else if (type === 'snow_pile') symbolContent = '❄️';
+         else if (type === 'me') symbolContent = '🔴';
     }
 
-    const html = `<div class="marker ${type}"><div class="pin"><div>${symbol}</div></div><div class="label">${label}</div></div>`;
+    // Обработка URL-картинок для маркеров
+    let finalSymbolHtml = symbolContent;
+    if (typeof symbolContent === 'string' && symbolContent.startsWith('http')) {
+        finalSymbolHtml = `<img src="${symbolContent}" style="width:30px; height:30px; object-fit:contain; border-radius:50%; border: 2px solid #fff;">`;
+    }
+
+    const html = `<div class="marker ${type}"><div class="pin"><div>${finalSymbolHtml}</div></div><div class="label">${label}</div></div>`;
     const icon = L.divIcon({ className: 'custom-leaflet-icon', html: html, iconSize: [40, 60], iconAnchor: [20, 50] });
 
     if (State.mapMarkers[id]) {
         State.mapMarkers[id].setLatLng(loc);
+        State.mapMarkers[id].setIcon(icon); // Обновляем иконку
     } else {
         const m = L.marker(loc, {icon: icon}).addTo(State.map);
         m.on('click', (e) => { 
@@ -250,7 +304,7 @@ function findActiveMission() {
     if (!sequence) return null;
 
     let activeTask = null;
-    // FIX: Using simple for loop instead of for..of
+    // Ищем первую невыполненную задачу
     for(let i = 0; i < sequence.length; i++) {
         const id = sequence[i];
         const task = tasks.find(t => t.id === id);
@@ -264,44 +318,61 @@ function findActiveMission() {
 
     const finalMissionId = CONFIG.FINAL_TASK_IDS[teamId];
     
-    // Final Lock Logic
+    // --- ЛОГИКА ФИНАЛА (Замок) ---
     if (activeTask.id === finalMissionId) {
         const requiredItems = FINAL_ITEM_REQUIREMENTS[teamId];
         const inventory = Core.state.currentTeam.inventory || {};
         let requirementsMet = true;
-        // FIX: Using for..in which is supported
         for (const itemId in requiredItems) {
             if ((inventory[itemId] || 0) < requiredItems[itemId]) {
                 requirementsMet = false;
                 break;
             }
         }
+        
+        // Координаты финала
+        let finalX = 50, finalY = 10; 
+        if(teamId === 101 || teamId === 103) { finalX = 45; finalY = 10; } // 409
+        else { finalX = 55; finalY = 75; } // 325
+
         if (!requirementsMet) {
-            const stallName = (teamId === 101 || teamId === 103) ? 'Палатка №409 (ФИНАЛ)' : 'Палатка №325 (ФИНАЛ)';
-            const point = State.staticPoints.find(p => p.title === stallName) || {x:50, y:50};
             return {
                 id: 'mission_locked', type: 'final_lock', 
-                x: point.x, y: point.y, 
+                x: finalX, y: finalY, 
                 title: '🔒 ФИНАЛ ЗАБЛОКИРОВАН', 
                 desc: 'Соберите все финальные предметы!', icon: '🔒', requiredItems: requiredItems 
+            };
+        } else {
+             return {
+                id: 'mission_active', type: 'mission_stall', 
+                x: finalX, y: finalY, 
+                title: 'ФИНАЛ!', desc: 'Кликай, чтобы победить!', 
+                taskId: activeTask.id, taskText: activeTask.text,
             };
         }
     }
 
-    // Active Mission Location
-    let pathKey = (teamId === 101 || teamId === 103) ? '101_103' : '102_104';
-    const missionStep = Core.MISSION_PATH_STRUCTURE[pathKey]?.find(p => p.taskId === activeTask.id);
-    
-    if (missionStep) {
-        const activeStall = State.staticPoints.find(p => p.title === missionStep.stallName);
-        if (activeStall) {
-            return {
-                id: 'mission_active', type: 'mission_stall', x: activeStall.x, y: activeStall.y, 
-                title: activeStall.title, desc: activeStall.desc, taskId: activeTask.id, taskText: activeTask.text,
-            };
-        }
+    // --- ЛОГИКА ОБЫЧНЫХ ЗАДАНИЙ ---
+    const location = MISSION_LOCATIONS[activeTask.id];
+
+    if (location) {
+        return {
+            id: 'mission_active', 
+            type: 'mission_stall', 
+            x: location.x, 
+            y: location.y, 
+            title: `Палатка №${location.stall}`, 
+            desc: "📍 Задание находится здесь!", 
+            taskId: activeTask.id, 
+            taskText: activeTask.text,
+        };
     }
-    return null; 
+
+    // Fallback
+    return {
+        id: 'mission_active', type: 'mission_stall', x: 50, y: 50, 
+        title: 'Задание', desc: 'Ищите цель...', taskId: activeTask.id, taskText: activeTask.text,
+    };
 }
 
 // =======================================================
@@ -347,6 +418,7 @@ function renderInventory() {
                     ${renderItemIcon(item)} 
                     <div style="display:flex; flex-direction:column;">
                         <span style="font-weight:bold; font-size:0.9rem;">${item.name}</span>
+                        <span style="font-size:0.75rem; color:#aaa;">${item.type === 'quest_item' ? 'Квестовый' : 'Ресурс'}</span>
                     </div>
                 </div>
                 <div style="display:flex; align-items:center; gap: 10px;">
@@ -375,12 +447,17 @@ function renderTasks() {
     const visibleTasks = activeIndex === -1 ? allTasks : allTasks.slice(0, activeIndex + 1);
 
     visibleTasks.forEach(task => {
-        const reward = task.reward_item_id ? (Core.state.globalItems[task.reward_item_id]?.emoji || '🎁') : '';
+        let reward = '';
+        if (task.reward_item_id) {
+            const item = Core.state.globalItems[task.reward_item_id];
+            reward = item ? renderItemIcon(item, '36px') : '🎁';
+        }
+
         tbody.innerHTML += `
             <tr class="${task.completed ? 'task-row completed' : 'task-row'}">
                 <td style="text-align:center; width:30px;"><input type="checkbox" ${task.completed ? 'checked disabled' : ''} onclick="return false;"></td>
                 <td>${task.text}</td>
-                <td style="text-align:center; font-size:1.2rem;">${reward}</td>
+                <td style="text-align:center;">${reward}</td>
             </tr>`;
     });
 
@@ -411,13 +488,6 @@ function renderMembers() {
                 </div>
             </li>`;
     });
-}
-
-function renderItemIcon(item) {
-    if (item.emoji && item.emoji.startsWith('http')) {
-        return `<img src="${item.emoji}" alt="${item.name}" style="width: 32px; height: 32px; object-fit: contain;">`;
-    }
-    return `<span style="font-size:1.5rem">${item.emoji}</span>`;
 }
 
 // =======================================================
@@ -496,7 +566,6 @@ window.routeTaskToModal = (taskId) => {
 };
 
 // --- Scavenger Logic ---
-// 1. Define the spawning function at the top level
 function spawnSnowPile() {
     if (State.dynamicSnowPiles.length >= CONFIG.MAX_SNOW_PILES) return;
     const newPile = {
@@ -508,7 +577,6 @@ function spawnSnowPile() {
     renderMarkers();
 }
 
-// 2. Wrap it for the init call
 function startSnowPileSpawning() {
     spawnSnowPile();
 }
@@ -531,10 +599,17 @@ window.handleScavengeInteraction = async (snowPileId) => {
         State.dynamicSnowPiles = State.dynamicSnowPiles.filter(p => p.id !== snowPileId);
         if (State.mapMarkers[snowPileId]) { State.mapMarkers[snowPileId].remove(); delete State.mapMarkers[snowPileId]; }
         
-        // Use window.spawnSnowPile() to ensure it uses the exported function
         setTimeout(() => { window.spawnSnowPile(); }, 120000); 
 
-        descEl.innerHTML = `<div style="text-align:center;"><h3>РЕЗУЛЬТАТ</h3><p>${result.message}</p></div>`;
+        // Отображение полученного предмета с поддержкой картинки
+        const foundItem = Core.state.globalItems[result.itemId];
+        const iconHtml = foundItem ? renderItemIcon(foundItem, '64px') : '🎁';
+
+        descEl.innerHTML = `<div style="text-align:center;">
+            <h3>НАЙДЕНО!</h3>
+            <div style="margin: 10px 0;">${iconHtml}</div>
+            <p>${result.message}</p>
+        </div>`;
         btns.innerHTML = `<button class="start-button" onclick="window.closeModal('interactionModal');">Готово</button>`;
         await Core.refreshTeamData(); 
         renderGameInterface();
@@ -591,7 +666,9 @@ window.performSpyAction = async () => {
             hasItems = true;
             const item = Core.state.globalItems[itemId];
             const name = item ? item.name : '???';
-            invHtml += `<li><span>${name}</span> <span>x${inv[itemId]}</span></li>`;
+            // Используем renderItemIcon для картинок
+            const icon = item ? renderItemIcon(item, '20px') : '';
+            invHtml += `<li style="display:flex; align-items:center; gap:5px;">${icon} <span>${name}</span> <span>x${inv[itemId]}</span></li>`;
         }
     });
     if(!hasItems) invHtml += `<li>Пусто...</li>`;
@@ -661,12 +738,21 @@ window.openIncomingTrades = async () => {
     }
 
     trades.forEach(t => {
-        const off = Core.state.globalItems[t.offer_item_id]?.name || '???';
-        const req = Core.state.globalItems[t.request_item_id]?.name || '???';
+        const offItem = Core.state.globalItems[t.offer_item_id];
+        const reqItem = Core.state.globalItems[t.request_item_id];
+        const offName = offItem?.name || '???';
+        const reqName = reqItem?.name || '???';
+        
+        const offIcon = offItem ? renderItemIcon(offItem, '24px') : '';
+        const reqIcon = reqItem ? renderItemIcon(reqItem, '24px') : '';
+
         list.innerHTML += `
             <div class="incoming-trade-card">
                 <p><b>${t.from_team_name}</b></p>
-                <p>Дают: ${off} | Просят: ${req}</p>
+                <div style="display:flex; align-items:center; gap:5px; margin:5px 0;">
+                    Дают: ${offIcon} ${offName} <br>
+                    Просят: ${reqIcon} ${reqName}
+                </div>
                 <button onclick="window.acceptTrade(${t.id})">✅</button>
                 <button onclick="window.rejectTrade(${t.id})">❌</button>
             </div>`;
@@ -684,7 +770,7 @@ window.rejectTrade = async (id) => {
     window.openIncomingTrades();
 };
 
-// --- Craft Logic ---
+// --- Craft Logic (UPDATED) ---
 window.openCraftModal = () => {
     if(Core.state.me.role !== 'Explorer') return alert("Только Исследователь!");
     renderCraftUI();
@@ -694,32 +780,73 @@ window.openCraftModal = () => {
 function renderCraftUI() {
     const container = document.getElementById('craftRecipesList');
     container.innerHTML = '';
+    
+    // Core.CRAFT_RECIPES должен содержать рецепты. Пример:
+    // { id: 1, name: "Супер-грелка", resultId: 10, ingredients: [{id: 5, count: 2}, {id: 2, count: 1}] }
+    
     Core.CRAFT_RECIPES.forEach(recipe => {
         const resultItem = Core.state.globalItems[recipe.resultId];
         if (!resultItem) return;
         
         let canCraft = true;
+        let reasons = [];
         let ingHtml = '';
+        
         recipe.ingredients.forEach(ing => {
             const has = (Core.state.currentTeam.inventory || {})[ing.id] || 0;
-            if (has < ing.count) canCraft = false;
             const item = Core.state.globalItems[ing.id];
-            ingHtml += `<div class="${has < ing.count ? 'missing' : ''}">${item.emoji} ${has}/${ing.count}</div>`;
+            
+            // ПРОВЕРКА: Нельзя использовать квестовые предметы
+            if (item && item.type === 'quest_item') {
+                canCraft = false;
+                reasons.push(`Нельзя тратить квестовый: ${item.name}`);
+            } else if (has < ing.count) {
+                canCraft = false;
+            }
+
+            ingHtml += `<div class="${has < ing.count ? 'missing' : ''}" style="display:flex; align-items:center; gap:5px;">
+                ${renderItemIcon(item, '24px')} 
+                <span>${has}/${ing.count}</span>
+            </div>`;
         });
+
+        const disabledAttr = !canCraft ? 'disabled' : '';
+        const errorMsg = reasons.length > 0 ? `<div style="color:#ff5555; font-size:0.8rem;">${reasons.join('<br>')}</div>` : '';
 
         container.innerHTML += `
             <div class="craft-recipe">
                 <div class="recipe-header"><b>${recipe.name}</b></div>
-                <div class="recipe-row">${ingHtml} ➔ ${resultItem.emoji}</div>
-                <button class="start-button" ${!canCraft ? 'disabled' : ''} onclick="window.doCraft(${recipe.id})">СОЗДАТЬ</button>
+                <div class="recipe-row" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                    ${ingHtml} 
+                    <span style="margin:0 5px;">➔</span> 
+                    ${renderItemIcon(resultItem, '32px')}
+                </div>
+                ${errorMsg}
+                <button class="start-button" ${disabledAttr} onclick="window.doCraft(${recipe.id})">СОЗДАТЬ</button>
             </div>`;
     });
 }
 
 window.doCraft = async (rid) => {
+    // Двойная проверка на клиенте перед отправкой
+    const recipe = Core.CRAFT_RECIPES.find(r => r.id === rid);
+    if (!recipe) return;
+
+    for (let ing of recipe.ingredients) {
+        const item = Core.state.globalItems[ing.id];
+        if (item && item.type === 'quest_item') {
+            return alert(`Ошибка! Предмет "${item.name}" является квестовым и уникальным. Его нельзя использовать для крафта.`);
+        }
+    }
+
     const res = await Core.craftItemLogic(rid);
-    if(res.success) { alert(`Создано: ${res.itemName}`); renderCraftUI(); renderGameInterface(); }
-    else alert(res.msg);
+    if(res.success) { 
+        alert(`Создано: ${res.itemName}`); 
+        renderCraftUI(); 
+        renderGameInterface(); 
+    } else { 
+        alert(res.msg); 
+    }
 };
 
 // --- Final Lock Logic ---
@@ -731,7 +858,6 @@ window.openFinalLockModal = (requirements) => {
     let allCollected = true;
     const inv = Core.state.currentTeam.inventory || {};
 
-    // FIX: Replaced for..of with Object.keys.forEach
     Object.keys(requirements).forEach(itemId => {
         const countNeeded = requirements[itemId];
         const item = Core.state.globalItems[itemId];
@@ -740,7 +866,7 @@ window.openFinalLockModal = (requirements) => {
         
         const slot = document.createElement('div');
         slot.className = `lock-item-slot ${has >= countNeeded ? 'collected' : 'missing'}`;
-        slot.innerHTML = renderItemIcon(item);
+        slot.innerHTML = renderItemIcon(item, '40px');
         grid.appendChild(slot);
     });
 
@@ -886,14 +1012,12 @@ function createSnowEffect() {
         ctx.clearRect(0, 0, W, H);
         ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
         ctx.beginPath();
-        // FIX: Replaced for..of with standard for loop
         for(let i = 0; i < flakes.length; i++) {
             let f = flakes[i];
             ctx.moveTo(f.x, f.y);
             ctx.arc(f.x, f.y, f.r, 0, Math.PI*2, true);
         }
         ctx.fill();
-        // FIX: Replaced for..of with standard for loop
         for(let i = 0; i < flakes.length; i++) {
             let f = flakes[i];
             f.y += Math.pow(f.d, 2) + 1;
@@ -920,7 +1044,14 @@ Object.assign(window, {
         document.getElementById('itemsGuideModal').classList.remove('hidden');
         const tbody = document.querySelector('#itemsGuideModal tbody');
         tbody.innerHTML = Object.values(Core.state.globalItems).map(i => 
-            `<tr><td style="font-size:2rem;">${i.emoji}</td><td><h4>${i.name}</h4><p>${i.description || ''}</p></td></tr>`
+            `<tr>
+                <td style="text-align:center;">${renderItemIcon(i, '50px')}</td>
+                <td>
+                    <h4>${i.name}</h4>
+                    <p>${i.description || ''}</p>
+                    <small>${i.type === 'quest_item' ? '❗ Квестовый (не для крафта)' : '🛠️ Ресурс/Гаджет'}</small>
+                </td>
+            </tr>`
         ).join('');
     },
     closeItemsGuide: () => document.getElementById('itemsGuideModal').classList.add('hidden'),
