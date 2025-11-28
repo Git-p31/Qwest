@@ -17,6 +17,8 @@ window.TEAMS_UI_CONFIG = TEAMS_UI_CONFIG;
 
 const TELEGRAM_GROUP_LINK = 'https://t.me/stuttgart_quest_group'; 
 const MAX_SNOW_PILES = 1; 
+const LAST_CHANCE_DURATION_MS = 5 * 60 * 1000; // 5 минут для режима "Последний шанс"
+
 window.TELEGRAM_GROUP_LINK = TELEGRAM_GROUP_LINK;
 
 // --- ПОРЯДОК МИССИЙ ---
@@ -526,16 +528,116 @@ window.routeTaskToModal = (taskId) => {
 };
 
 // --- SPY, ITEM USE, CRAFT ---
+
+// 🕵️ НОВАЯ ЛОГИКА ШПИОНА
 window.openSpyModal = () => {
     if (Core.state.me.role !== 'Spy') return alert("Доступно только Шпиону!");
-    let info = "🕵️ ОТЧЕТ РАЗВЕДКИ:\n\n";
+    
+    // Используем универсальное модальное окно
+    const modal = document.getElementById('interactionModal');
+    const titleEl = document.getElementById('interactTitle');
+    const descEl = document.getElementById('interactDesc');
+    const btns = document.getElementById('interactButtons');
+    const iconEl = document.getElementById('interactIcon');
+
+    // Настраиваем заголовки
+    titleEl.textContent = "🕵️ ШПИОНАЖ";
+    iconEl.innerHTML = "🕵️‍♂️";
+    
+    // Генерируем выпадающий список команд (кроме своей)
+    let selectHtml = `
+        <div style="margin-bottom:15px; text-align:left;">
+            <p class="muted" style="margin-bottom:10px;">Выберите команду для взлома базы данных:</p>
+            <label class="label-accent">Цель:</label>
+            <select id="spyTargetSelect" class="modal-input">
+    `;
+    
     Core.state.otherTeams.forEach(t => {
-        const frozen = t.frozen_until && new Date(t.frozen_until) > new Date() ? ' (🧊 ЗАМОРОЖЕНЫ)' : '';
-        info += `📍 Команда ${t.name_by_leader || t.name}${frozen}\n`;
-        info += `   Координаты: ~${Math.round(t.x)}, ~${Math.round(t.y)}\n`;
-        info += `   Игроков: ${t.playerCount}\n\n`;
+        // Отображаем имя (либо лидерское, либо дефолтное)
+        selectHtml += `<option value="${t.id}">${t.name_by_leader || t.name}</option>`;
     });
-    alert(info);
+    selectHtml += '</select></div>';
+
+    descEl.innerHTML = selectHtml;
+    
+    // Кнопки действий
+    btns.innerHTML = `
+        <button class="start-button" onclick="window.performSpyAction()">🔍 СКАНИРОВАТЬ ИНВЕНТАРЬ</button>
+        <button class="secondary" style="margin-top: 10px;" onclick="window.closeModal('interactionModal')">ОТМЕНА</button>
+    `;
+
+    modal.classList.remove('hidden');
+};
+
+// Функция выполнения сканирования (вызывается по кнопке)
+window.performSpyAction = async () => {
+    const select = document.getElementById('spyTargetSelect');
+    if (!select) return;
+    const targetId = select.value;
+    
+    const descEl = document.getElementById('interactDesc');
+    const btns = document.getElementById('interactButtons');
+    
+    // 1. Показываем анимацию загрузки
+    descEl.innerHTML = `<div class="tent-waiting"><div class="loader-spinner"></div><p>Взлом систем безопасности...</p></div>`;
+    btns.innerHTML = ''; // Скрываем кнопки на время загрузки
+
+    // Искусственная задержка для эффекта "работы" (1 секунда)
+    await new Promise(r => setTimeout(r, 1000));
+
+    // 2. Запрашиваем данные через Core
+    const data = await Core.getEnemyInventory(targetId);
+    
+    if (!data) {
+        descEl.innerHTML = `<p style="color:var(--accent-red); font-weight:bold;">❌ Ошибка соединения. Цель недоступна.</p>`;
+        btns.innerHTML = `<button class="start-button" onclick="window.closeModal('interactionModal')">ЗАКРЫТЬ</button>`;
+        return;
+    }
+
+    // 3. Формируем список предметов
+    const targetName = data.name_by_leader || data.name || 'Цель';
+    let invHtml = `<h4 style="color:var(--accent-gold); margin-bottom:15px; border-bottom:1px solid #333; padding-bottom:5px;">🎒 Инвентарь: ${targetName}</h4>`;
+    invHtml += `<ul class="inventory-list" style="max-height: 250px; overflow-y: auto; padding-right:5px;">`;
+    
+    const inv = data.inventory || {};
+    let hasItems = false;
+    
+    // Проходим по всем предметам в инвентаре врага
+    Object.keys(inv).forEach(itemId => {
+        if (inv[itemId] > 0) {
+            hasItems = true;
+            const itemDef = Core.state.globalItems[itemId];
+            const itemName = itemDef ? itemDef.name : 'Неизвестный предмет';
+            
+            // Логика отображения иконки (картинка или эмодзи)
+            let iconDisplay = '📦';
+            if (itemDef) {
+                 if (itemDef.emoji && itemDef.emoji.startsWith('http')) {
+                     iconDisplay = `<img src="${itemDef.emoji}" style="width:28px;height:28px;vertical-align:middle; object-fit:contain;">`;
+                 } else {
+                     iconDisplay = `<span style="font-size:1.2rem;">${itemDef.emoji}</span>`;
+                 }
+            }
+            
+            invHtml += `
+            <li style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.05); background:rgba(0,0,0,0.2); margin-bottom:4px; border-radius:4px;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    ${iconDisplay}
+                    <span>${itemName}</span>
+                </div>
+                <span class="inv-count" style="background:#444; color:#fff;">x${inv[itemId]}</span>
+            </li>`;
+        }
+    });
+
+    if (!hasItems) {
+        invHtml += `<li class="muted" style="text-align:center; padding:20px;">Инвентарь пуст...</li>`;
+    }
+    invHtml += `</ul>`;
+
+    // 4. Выводим результат
+    descEl.innerHTML = invHtml;
+    btns.innerHTML = `<button class="start-button" onclick="window.closeModal('interactionModal')">ЗАКРЫТЬ ОТЧЕТ</button>`;
 };
 
 window.handleItemUse = async (id) => {

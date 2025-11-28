@@ -447,3 +447,18 @@ export async function respondToTrade(tradeId, accept = true) {
     const { error } = await supabase.from('trade_requests').update({ status: newStatus }).eq('id', tradeId);
     return { success: !error };
 }
+
+// 🕵️ НОВАЯ ФУНКЦИЯ ДЛЯ ШПИОНА
+export async function getEnemyInventory(targetTeamId) {
+    const { data, error } = await supabase
+        .from('teams')
+        .select('inventory, name_by_leader, name')
+        .eq('id', targetTeamId)
+        .single();
+    
+    if (error) {
+        console.error("Spy error:", error);
+        return null;
+    }
+    return data;
+}
