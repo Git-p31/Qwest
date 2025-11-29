@@ -461,10 +461,13 @@ function renderTasks() {
             reward = item ? renderItemIcon(item, '36px') : '🎁';
         }
 
+        // --- ФИКС: Убираем "Миссия X" из текста ---
+        const cleanText = task.text.replace(/^(Миссия|Задание)\s*\d*\s*[:.-]?\s*/i, '');
+
         tbody.innerHTML += `
             <tr class="${task.completed ? 'task-row completed' : 'task-row'}">
                 <td style="text-align:center; width:30px;"><input type="checkbox" ${task.completed ? 'checked disabled' : ''} onclick="return false;"></td>
-                <td>${task.text}</td>
+                <td>${cleanText}</td>
                 <td style="text-align:center;">${reward}</td>
             </tr>`;
     });

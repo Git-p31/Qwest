@@ -100,11 +100,6 @@ export const startChallenge = async () => {
     }
 
     // Создаем игру в БД
-    // Внимание: Core.createPvPGame мы модифицируем вызов, передавая initialBoard
-    // Т.к. в core.js createPvPGame по умолчанию делает массив(9), мы можем передать свой board_state через отдельный вызов или 
-    // полагаться на то, что core.js был обновлен. В данном случае мы используем стандартную функцию, но если это Бинго, нам нужно обновить поле сразу.
-    
-    // Чтобы не менять core.js снова, мы создадим игру, а потом сразу обновим поле, если это Бинго.
     const res = await Core.createPvPGame(targetId, gameState.activeGameType);
 
     if (res.success) {
@@ -113,7 +108,6 @@ export const startChallenge = async () => {
         if (gameState.activeGameType === 'bingo') {
             await Core.makeGameMove(res.game.id, initialBoardState, Core.state.me.team_id);
         }
-        // Дальше ждем Realtime обновления, которое вызовет syncGameFromDB
     } else {
         alert("Ошибка: " + res.msg);
         btn.textContent = originalText;
@@ -173,9 +167,9 @@ export const syncGameFromDB = (game) => {
             handleDefeat();
         } else {
             statusText.innerHTML = "🤝 НИЧЬЯ";
-            handleDraw(); // Обработаем как поражение для простоты или просто закроем
+            handleDraw();
         }
-        stopBingoHost(); // Остановить таймер если был
+        stopBingoHost(); 
     } else {
         // Игра идет
         if (game.game_type === 'tictactoe') {
@@ -195,7 +189,7 @@ export const syncGameFromDB = (game) => {
 // ==========================================
 
 function renderTicTacToeBoard(boardData) {
-    if (!Array.isArray(boardData)) return; // Защита
+    if (!Array.isArray(boardData)) return; 
     const container = document.getElementById('gameBoardContainer');
     container.className = 'ttt-grid'; 
     container.innerHTML = boardData.map((cell, i) => `
@@ -222,7 +216,7 @@ export const handleGameMove = async (index) => {
     const winner = checkWinnerTTT(newBoard, gameState.myRole);
     
     if (winner) {
-        // Мы выиграли -> завершаем игру
+        // Мы выиграли
         await Core.makeGameMove(gameState.activeGameId, newBoard, null);
         await Core.finishGame(gameState.activeGameId, Core.state.me.team_id);
     } else if (!newBoard.includes(null)) {
@@ -245,12 +239,10 @@ function checkWinnerTTT(board, symbol) {
 // ==========================================
 
 function generateInitialBingoState() {
-    // Генерируем общее поле для обоих игроков
     const fillers = BINGO_FILLERS.map(emoji => ({ answer: emoji, marked: false }));
     const correct = BINGO_QUESTIONS.map(item => ({ answer: item.a, marked: false }));
     const fullGrid = [...correct, ...fillers].sort(() => Math.random() - 0.5);
     
-    // Колода вопросов
     const deck = [...BINGO_QUESTIONS].sort(() => Math.random() - 0.5);
     const firstQ = deck.pop();
 
@@ -258,15 +250,14 @@ function generateInitialBingoState() {
         grid: fullGrid,
         deck: deck,
         currentQ: firstQ,
-        timeLeft: 15,
+        timeLeft: 5, // FIX: Time reduced to 5 seconds
         lastUpdate: Date.now()
     };
 }
 
 function handleBingoSync(stateData) {
-    if (!stateData || !stateData.grid) return; // Еще не загрузилось
+    if (!stateData || !stateData.grid) return; 
 
-    // Если я Хост, я должен крутить таймер и обновлять вопросы в БД
     if (gameState.isHost && !gameState.bingoHostTimer) {
         startBingoHostLoop();
     }
@@ -274,32 +265,26 @@ function handleBingoSync(stateData) {
     renderBingoBoard(stateData);
 }
 
-// Только создатель игры запускает этот цикл
 function startBingoHostLoop() {
     if (gameState.bingoHostTimer) clearInterval(gameState.bingoHostTimer);
     
     gameState.bingoHostTimer = setInterval(async () => {
-        // Получаем актуальное состояние (оно обновляется через sync)
         const currentState = gameState.board;
         if (!currentState || !currentState.currentQ) return;
 
         let newTime = currentState.timeLeft - 1;
         let newDeck = currentState.deck;
         let newQ = currentState.currentQ;
-        let changed = false;
 
         if (newTime <= 0) {
             // Смена вопроса
             if (newDeck.length === 0) {
-                // Рестарт колоды
                 newDeck = [...BINGO_QUESTIONS].sort(() => Math.random() - 0.5);
             }
             newQ = newDeck.pop();
-            newTime = 15;
-            changed = true;
+            newTime = 10; // FIX: Reset to 10 seconds
         }
 
-        // Обновляем БД (только таймер или вопрос)
         const newState = {
             ...currentState,
             timeLeft: newTime,
@@ -308,9 +293,6 @@ function startBingoHostLoop() {
             lastUpdate: Date.now()
         };
 
-        // Чтобы не спамить БД каждую секунду, можно обновлять реже, но для плавности UI обновляем
-        // Оптимизация: обновляем локально UI, а в БД пишем раз в 3 сек или при смене вопроса?
-        // Для надежности пишем всегда (Supabase Realtime выдержит 1 запрос в сек от одного клиента)
         await Core.makeGameMove(gameState.activeGameId, newState, Core.state.me.team_id);
 
     }, 1000);
@@ -327,7 +309,6 @@ function renderBingoBoard(stateData) {
     const container = document.getElementById('gameBoardContainer');
     const area = document.getElementById('gameBoardArea');
     
-    // Шапка вопроса
     let qDiv = document.getElementById('bingoQuestionHeader');
     if (!qDiv) {
         qDiv = document.createElement('div');
@@ -335,16 +316,16 @@ function renderBingoBoard(stateData) {
         area.insertBefore(qDiv, container);
     }
     
+    // FIX: Progress bar calculation based on 10s
     qDiv.innerHTML = `
         <div style="background: rgba(0,0,0,0.6); border: 2px solid #FFD700; padding: 10px; border-radius: 12px; margin-bottom: 10px; text-align: center;">
             <p style="font-size: 1rem; color: #fff; margin:0 0 5px 0;">${stateData.currentQ.q}</p>
             <div style="height: 6px; background: #333; border-radius: 3px;">
-                <div style="width: ${(stateData.timeLeft / 15) * 100}%; height: 100%; background: #FFD700; transition: width 0.5s linear;"></div>
+                <div style="width: ${(stateData.timeLeft / 10) * 100}%; height: 100%; background: #FFD700; transition: width 0.5s linear;"></div>
             </div>
         </div>
     `;
 
-    // Сетка
     container.className = 'bingo-grid';
     container.style.display = 'grid';
     container.style.gridTemplateColumns = 'repeat(5, 1fr)';
@@ -368,26 +349,21 @@ export const handleBingoClick = async (index) => {
     const currentState = gameState.board;
     const cell = currentState.grid[index];
     
-    if (cell.marked) return; // Уже нажато
+    if (cell.marked) return; 
     
-    // Проверка ответа (у всех общий вопрос)
     if (cell.answer === currentState.currentQ.a) {
-        // Верно!
         const newGrid = [...currentState.grid];
         newGrid[index] = { ...cell, marked: true };
         
         const newState = { ...currentState, grid: newGrid };
         
-        // Отправляем в БД
         await Core.makeGameMove(gameState.activeGameId, newState, Core.state.me.team_id);
         
-        // Проверка победы (Кто первый собрал линию - тот победил)
         if (checkBingoWin(newGrid)) {
             stopBingoHost();
             await Core.finishGame(gameState.activeGameId, Core.state.me.team_id);
         }
     } else {
-        // Ошибка (визуальный эффект локально)
         const el = document.querySelectorAll('.bingo-grid > div')[index];
         if (el) el.style.background = 'red';
         setTimeout(() => { if(el) el.style.background = 'rgba(255,255,255,0.05)'; }, 300);
@@ -399,11 +375,9 @@ function checkBingoWin(grid) {
     const check = (idxs) => idxs.every(i => grid[i].marked);
     
     for(let i=0; i<size; i++) {
-        // Row & Col
         if (check([...Array(size)].map((_,j) => i*size+j))) return true;
         if (check([...Array(size)].map((_,j) => j*size+i))) return true;
     }
-    // Diagonals
     if (check([...Array(size)].map((_,i) => i*size+i))) return true;
     if (check([...Array(size)].map((_,i) => i*size+(size-1-i)))) return true;
     
@@ -416,7 +390,6 @@ function checkBingoWin(grid) {
 
 async function handleVictory() {
     const teamId = Core.state.me.team_id;
-    // Логика завершения финального задания (15 или 6)
     const finalTaskId = (teamId === 101 || teamId === 103) ? 6 : 15;
     const tasks = Core.state.currentTeam.tasks;
     const task = tasks.find(t => t.id === finalTaskId);
@@ -441,7 +414,6 @@ function handleDraw() {
     window.closeModal('gameChallengeModal');
 }
 
-// Экспорт в window для HTML onclick
 Object.assign(window, {
     handleGameMove,
     handleBingoClick,
